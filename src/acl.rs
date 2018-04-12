@@ -154,7 +154,7 @@ impl ACL {
         }
     }
 
-    pub fn get_entry(&self, sid: PSID) -> Result<Vec<ACLEntry>, DWORD> {
+    pub fn get_entries_by_sid(&self, sid: PSID) -> Result<Vec<ACLEntry>, DWORD> {
         let mut callback = GetEntryCallback {
             target: sid,
             entries: Vec::new()
@@ -172,8 +172,11 @@ impl ACL {
         Ok(callback.entries)
     }
 
+    pub fn get_audit_entries_by_sid(&self, sid: PSID) -> result<Vec<ACLEntry>, DWORD> {
+
+    }
+
     // pub fn add_entry() {}
-    // pub fn get_audit_entry() {}
     // pub fn add_audit_entry() {}
 
 }
