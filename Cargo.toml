@@ -1,0 +1,8 @@
+[package]
+name = "windows-acl"
+version = "0.1.0"
+authors = ["user"]
+
+[dependencies]
+field-offset = "0.1.1"
+winapi = { path = "../winapi-rs", features = ["aclapi", "errhandlingapi", "handleapi", "securitybaseapi", "winbase", "winerror"] }
