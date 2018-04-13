@@ -207,7 +207,6 @@ impl ACL {
         }
     }
 
-    // TODO(andy): Rethink this approach
     pub fn get_entries_by_sid(&self, sid: PSID) -> Result<Vec<ACLEntry>, DWORD> {
         let mut callback = GetEntryCallback {
             target: sid,
@@ -218,27 +217,22 @@ impl ACL {
             Some(ref descriptor) => {
                 let pDacl = descriptor.pDacl;
 
-                enumerate_acl_entries(pDacl, &mut callback);
+                if !enumerate_acl_entries(pDacl, &mut callback) {
+                    return Err(unsafe { GetLastError() });
+                }
             },
-            None => return Err(0)
+            None => {}
         }
-
-        Ok(callback.entries)
-    }
-
-    pub fn get_audit_entries_by_sid(&self, sid: PSID) -> Result<Vec<ACLEntry>, DWORD> {
-        let mut callback = GetEntryCallback {
-            target: sid,
-            entries: Vec::new()
-        };
 
         match self.descriptor {
             Some(ref descriptor) => {
                 let pSacl = descriptor.pSacl;
 
-                enumerate_acl_entries(pSacl, &mut callback);
+                if !enumerate_acl_entries(pSacl, &mut callback) {
+                    return Err(unsafe { GetLastError() });
+                }
             },
-            None => return Err(0)
+            None => {}
         }
 
         Ok(callback.entries)
@@ -246,7 +240,7 @@ impl ACL {
 
     // TODO(andy): For initial version, we do not support object, conditional ACEs
 
-    // pub fn add_entry() {}
+    // pub fn add_entry_by_sid(&mut self, sid: PSID, entry_type: AceType) {}
 
 
 }
