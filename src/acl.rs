@@ -25,11 +25,31 @@ use winapi::um::winnt::{
     ACCESS_DENIED_CALLBACK_OBJECT_ACE, ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_DENIED_OBJECT_ACE,
     ACCESS_DENIED_OBJECT_ACE_TYPE, ACCESS_MASK, PACE_HEADER, PACL, PSID, SYSTEM_AUDIT_ACE, SYSTEM_AUDIT_ACE_TYPE,
     SYSTEM_AUDIT_CALLBACK_ACE, SYSTEM_AUDIT_CALLBACK_ACE_TYPE, SYSTEM_AUDIT_CALLBACK_OBJECT_ACE,
-    SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE, SYSTEM_AUDIT_OBJECT_ACE, SYSTEM_AUDIT_OBJECT_ACE_TYPE
+    SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE, SYSTEM_AUDIT_OBJECT_ACE, SYSTEM_AUDIT_OBJECT_ACE_TYPE,
+    SYSTEM_MANDATORY_LABEL_ACE, SYSTEM_MANDATORY_LABEL_ACE_TYPE, SYSTEM_RESOURCE_ATTRIBUTE_ACE,
+    SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE
 };
 
+pub enum AceType {
+    Unknown = 0,
+    AccessAllow = 1,
+    AccessAllowCallback,
+    AccessAllowObject,
+    AccessAllowCallbackObject,
+    AccessDeny = 5,
+    AccessDenyCallback,
+    AccessDenyObject,
+    AccessDenyCallbackObject,
+    SystemAudit = 9,
+    SystemAuditCallback,
+    SystemAuditObject,
+    SystemAuditCallbackObject,
+    SystemMandatoryLabel = 13,
+    SystemResourceAttribute
+}
+
 pub struct ACLEntry {
-    entry_type: BYTE,
+    entry_type: AceType,
     size: WORD,
     flags: BYTE,
     mask: ACCESS_MASK,
@@ -42,7 +62,7 @@ pub struct ACL {
 }
 
 macro_rules! process_entry {
-    ($entry: ident, $ptr: ident => $cls: path) => {
+    ($entry: ident, $typ: path, $ptr: ident => $cls: path) => {
         {
             let entry_ptr: *mut $cls = $ptr as *mut $cls;
             let sid_offset = offset_of!($cls => SidStart);
@@ -54,7 +74,7 @@ macro_rules! process_entry {
 
                 if unsafe { CopySid(size, sid.as_mut_ptr() as PSID, pSid) } != 0 {
                     $entry.sid = Some(sid);
-                    $entry.entry_type = unsafe { (*$ptr).AceType };
+                    $entry.entry_type = $typ;
                     $entry.size = unsafe { (*$ptr).AceSize };
                     $entry.flags = unsafe { (*$ptr).AceFlags };
                     $entry.mask = unsafe { (*entry_ptr).Mask};
@@ -68,36 +88,67 @@ trait EntryCallback {
     fn on_entry(&mut self, hdr: PACE_HEADER, entry: ACLEntry) -> bool;
 }
 
-fn enumerate_acl_entries<T: EntryCallback>(pAcl: PACL, callback: &mut T) {
+fn enumerate_acl_entries<T: EntryCallback>(pAcl: PACL, callback: &mut T) -> bool {
     let mut hdr: PACE_HEADER = NULL as PACE_HEADER;
     let ace_count = unsafe { (*pAcl).AceCount };
 
     for i in 0..ace_count {
         if unsafe { GetAce(pAcl, i as DWORD, mem::transmute::<&mut PACE_HEADER, *mut LPVOID>(&mut hdr)) } == 0 {
-            break
+            return false;
         }
 
         let mut entry = ACLEntry {
-            entry_type: 0,
+            entry_type: AceType::Unknown,
             size: 0,
             flags: 0,
             mask: 0,
             sid: None
         };
 
+        // TODO(andy): Consider creating an enum for these items?
         match unsafe { (*hdr).AceType } {
-            ACCESS_ALLOWED_ACE_TYPE => process_entry!(entry, hdr => ACCESS_ALLOWED_ACE),
-            ACCESS_ALLOWED_CALLBACK_ACE_TYPE => process_entry!(entry, hdr => ACCESS_ALLOWED_CALLBACK_ACE),
-            ACCESS_ALLOWED_OBJECT_ACE_TYPE => process_entry!(entry, hdr => ACCESS_ALLOWED_OBJECT_ACE),
-            ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE => process_entry!(entry, hdr => ACCESS_ALLOWED_CALLBACK_OBJECT_ACE),
-            ACCESS_DENIED_ACE_TYPE => process_entry!(entry, hdr => ACCESS_DENIED_ACE),
-            ACCESS_DENIED_CALLBACK_ACE_TYPE => process_entry!(entry, hdr => ACCESS_DENIED_CALLBACK_ACE),
-            ACCESS_DENIED_OBJECT_ACE_TYPE => process_entry!(entry, hdr => ACCESS_DENIED_OBJECT_ACE),
-            ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE => process_entry!(entry, hdr => ACCESS_DENIED_CALLBACK_OBJECT_ACE),
-            SYSTEM_AUDIT_ACE_TYPE => process_entry!(entry, hdr => SYSTEM_AUDIT_ACE),
-            SYSTEM_AUDIT_CALLBACK_ACE_TYPE => process_entry!(entry, hdr => SYSTEM_AUDIT_CALLBACK_ACE),
-            SYSTEM_AUDIT_OBJECT_ACE_TYPE => process_entry!(entry, hdr => SYSTEM_AUDIT_OBJECT_ACE),
-            SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE => process_entry!(entry, hdr => SYSTEM_AUDIT_CALLBACK_OBJECT_ACE),
+            ACCESS_ALLOWED_ACE_TYPE => process_entry!(entry,
+                                                      AceType::AccessAllow,
+                                                      hdr => ACCESS_ALLOWED_ACE),
+            ACCESS_ALLOWED_CALLBACK_ACE_TYPE => process_entry!(entry,
+                                                               AceType::AccessAllowCallback,
+                                                               hdr => ACCESS_ALLOWED_CALLBACK_ACE),
+            ACCESS_ALLOWED_OBJECT_ACE_TYPE => process_entry!(entry,
+                                                             AceType::AccessAllowObject,
+                                                             hdr => ACCESS_ALLOWED_OBJECT_ACE),
+            ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE => process_entry!(entry,
+                                                                      AceType::AccessAllowCallbackObject,
+                                                                      hdr => ACCESS_ALLOWED_CALLBACK_OBJECT_ACE),
+            ACCESS_DENIED_ACE_TYPE => process_entry!(entry,
+                                                     AceType::AccessDeny,
+                                                     hdr => ACCESS_DENIED_ACE),
+            ACCESS_DENIED_CALLBACK_ACE_TYPE => process_entry!(entry,
+                                                              AceType::AccessDenyCallback,
+                                                              hdr => ACCESS_DENIED_CALLBACK_ACE),
+            ACCESS_DENIED_OBJECT_ACE_TYPE => process_entry!(entry,
+                                                            AceType::AccessDenyObject,
+                                                            hdr => ACCESS_DENIED_OBJECT_ACE),
+            ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE => process_entry!(entry,
+                                                                     AceType::AccessDenyCallbackObject,
+                                                                     hdr => ACCESS_DENIED_CALLBACK_OBJECT_ACE),
+            SYSTEM_AUDIT_ACE_TYPE => process_entry!(entry,
+                                                    AceType::SystemAudit,
+                                                    hdr => SYSTEM_AUDIT_ACE),
+            SYSTEM_AUDIT_CALLBACK_ACE_TYPE => process_entry!(entry,
+                                                             AceType::SystemAuditCallback,
+                                                             hdr => SYSTEM_AUDIT_CALLBACK_ACE),
+            SYSTEM_AUDIT_OBJECT_ACE_TYPE => process_entry!(entry,
+                                                           AceType::SystemAuditObject,
+                                                           hdr => SYSTEM_AUDIT_OBJECT_ACE),
+            SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE => process_entry!(entry,
+                                                                    AceType::SystemAuditCallbackObject,
+                                                                    hdr => SYSTEM_AUDIT_CALLBACK_OBJECT_ACE),
+            SYSTEM_MANDATORY_LABEL_ACE_TYPE => process_entry!(entry,
+                                                              AceType::SystemMandatoryLabel,
+                                                              hdr => SYSTEM_MANDATORY_LABEL_ACE),
+            SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE => process_entry!(entry,
+                                                                 AceType::SystemResourceAttribute,
+                                                                 hdr => SYSTEM_RESOURCE_ATTRIBUTE_ACE),
             _ => {}
         }
 
@@ -105,6 +156,8 @@ fn enumerate_acl_entries<T: EntryCallback>(pAcl: PACL, callback: &mut T) {
             break
         }
     }
+
+    true
 }
 
 struct GetEntryCallback {
@@ -154,6 +207,7 @@ impl ACL {
         }
     }
 
+    // TODO(andy): Rethink this approach
     pub fn get_entries_by_sid(&self, sid: PSID) -> Result<Vec<ACLEntry>, DWORD> {
         let mut callback = GetEntryCallback {
             target: sid,
@@ -164,7 +218,7 @@ impl ACL {
             Some(ref descriptor) => {
                 let pDacl = descriptor.pDacl;
 
-                enumerate_acl_entries(pDacl, &mut callback)
+                enumerate_acl_entries(pDacl, &mut callback);
             },
             None => return Err(0)
         }
@@ -172,12 +226,28 @@ impl ACL {
         Ok(callback.entries)
     }
 
-    pub fn get_audit_entries_by_sid(&self, sid: PSID) -> result<Vec<ACLEntry>, DWORD> {
+    pub fn get_audit_entries_by_sid(&self, sid: PSID) -> Result<Vec<ACLEntry>, DWORD> {
+        let mut callback = GetEntryCallback {
+            target: sid,
+            entries: Vec::new()
+        };
 
+        match self.descriptor {
+            Some(ref descriptor) => {
+                let pSacl = descriptor.pSacl;
+
+                enumerate_acl_entries(pSacl, &mut callback);
+            },
+            None => return Err(0)
+        }
+
+        Ok(callback.entries)
     }
 
+    // TODO(andy): For initial version, we do not support object, conditional ACEs
+
     // pub fn add_entry() {}
-    // pub fn add_audit_entry() {}
+
 
 }
 
