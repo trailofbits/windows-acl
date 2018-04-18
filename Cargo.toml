@@ -3,6 +3,17 @@ name = "windows-acl"
 version = "0.1.0"
 authors = ["user"]
 
+[lib]
+name = "windows_acl"
+path = "src/lib.rs"
+
+[[bin]]
+name = "query_acl"
+path = "src/query_acl.rs"
+
 [dependencies]
+clap = "2.31.2"
 field-offset = "0.1.1"
-winapi = { path = "../winapi-rs", features = ["aclapi", "errhandlingapi", "handleapi", "securitybaseapi", "winbase", "winerror"] }
+libc = "0.2.40"
+widestring = "0.3.0"
+winapi = { path = "../winapi-rs", features = ["aclapi", "errhandlingapi", "handleapi", "sddl", "securitybaseapi", "winbase", "winerror"] }

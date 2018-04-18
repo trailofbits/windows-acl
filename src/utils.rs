@@ -1,17 +1,25 @@
 #![allow(non_snake_case)]
 
+use libc;
 use std::ffi::OsStr;
 use std::iter::once;
 use std::mem;
 use std::ops::Drop;
 use std::os::windows::ffi::OsStrExt;
+use widestring::WideString;
 use winapi::shared::minwindef::{
-    DWORD, FALSE, PDWORD
+    DWORD, FALSE, HLOCAL, PDWORD
 };
 use winapi::shared::ntdef::{
-    LPCWSTR, HANDLE, NULL
+    LPCWSTR, LPWSTR, HANDLE, NULL
 };
-use winapi::shared::winerror::ERROR_SUCCESS;
+use winapi::shared::sddl::{
+    ConvertSidToStringSidW
+};
+use winapi::shared::winerror::{
+    ERROR_NOT_ALL_ASSIGNED,
+    ERROR_SUCCESS
+};
 use winapi::um::accctrl::{
   SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
   SE_SERVICE
@@ -40,13 +48,27 @@ use winapi::um::winnt::{
     SECURITY_DESCRIPTOR_REVISION, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY
 };
 
+pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
+    let mut raw_string_sid: LPWSTR = NULL as LPWSTR;
+    if unsafe { ConvertSidToStringSidW(sid, &mut raw_string_sid) } == 0 ||
+        raw_string_sid == (NULL as LPWSTR) {
+        return Err(unsafe { GetLastError() });
+    }
+
+    let raw_string_sid_len = unsafe { libc::wcslen(raw_string_sid) };
+    let sid_string = unsafe { WideString::from_ptr(raw_string_sid, raw_string_sid_len)};
+
+    unsafe { LocalFree(raw_string_sid as HLOCAL) };
+
+    Ok(sid_string.to_string_lossy())
+}
+
 fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
     let mut tkp = unsafe { mem::zeroed::<TOKEN_PRIVILEGES>() };
-    let mut laa = unsafe { mem::zeroed::<LUID_AND_ATTRIBUTES>() };
     let wPrivilegeName: Vec<u16> = OsStr::new(name).encode_wide().chain(once(0)).collect();
 
     if unsafe {
-        LookupPrivilegeValueW(NULL as LPCWSTR, wPrivilegeName.as_ptr(), &mut laa.Luid)
+        LookupPrivilegeValueW(NULL as LPCWSTR, wPrivilegeName.as_ptr(), &mut tkp.Privileges[0].Luid)
     } == 0 {
         return Err(unsafe { GetLastError() });
     }
@@ -54,9 +76,9 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
     tkp.PrivilegeCount = 1;
 
     if is_enabled {
-        laa.Attributes = SE_PRIVILEGE_ENABLED;
+        tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
     } else {
-        laa.Attributes = 0;
+        tkp.Privileges[0].Attributes = 0;
     }
 
     let mut hToken: HANDLE = INVALID_HANDLE_VALUE;
@@ -69,10 +91,20 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
     }
 
     let status = unsafe {
-        AdjustTokenPrivileges(hToken, FALSE, &mut tkp, 0, NULL as PTOKEN_PRIVILEGES, NULL as PDWORD)
+        AdjustTokenPrivileges(hToken,
+                              FALSE,
+                              &mut tkp,
+                              0,
+                              NULL as PTOKEN_PRIVILEGES,
+                              NULL as PDWORD)
     };
     let code = unsafe { GetLastError() };
     unsafe { CloseHandle(hToken) };
+
+    if code == ERROR_NOT_ALL_ASSIGNED {
+        println!("not all assigned");
+        return Err(code);
+    }
 
     if status == 0 {
         return Err(code);
@@ -128,7 +160,8 @@ impl SecurityDescriptor {
 
         if get_sacl {
             obj.privilege = match SystemPrivilege::acquire("SeSecurityPrivilege") {
-              Ok(p) => Some(p), Err(e) => return Err(e)
+                Ok(p) => Some(p),
+                Err(c) => return Err(c)
             };
 
             flags |= SACL_SECURITY_INFORMATION;
@@ -150,7 +183,7 @@ impl SecurityDescriptor {
             return Err(ret);
         }
 
-        if get_sacl {
+        if !get_sacl {
             obj.pSacl = NULL as PACL;
         }
 
@@ -187,6 +220,8 @@ impl SecurityDescriptor {
 
         Ok(SecurityDescriptor::default())
     }
+
+    // TODO(andy): We need a commit/apply function which bakes the security descriptor into
 }
 
 impl Drop for SecurityDescriptor {
