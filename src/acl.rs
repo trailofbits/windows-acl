@@ -4,7 +4,7 @@ use field_offset::*;
 use std::fmt;
 use std::mem;
 use utils::{
-    SecurityDescriptor, sid_to_string,
+    SecurityDescriptor
 };
 use winapi::shared::minwindef::{
     BYTE, DWORD, LPVOID, WORD,
@@ -30,17 +30,23 @@ use winapi::um::winnt::{
     SYSTEM_MANDATORY_LABEL_ACE, SYSTEM_MANDATORY_LABEL_ACE_TYPE, SYSTEM_RESOURCE_ATTRIBUTE_ACE,
     SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE,
 };
-use winapi::um::winnt::{
-    CONTAINER_INHERIT_ACE, FAILED_ACCESS_ACE_FLAG, INHERIT_ONLY_ACE, INHERITED_ACE, NO_PROPAGATE_INHERIT_ACE,
-    OBJECT_INHERIT_ACE, SUCCESSFUL_ACCESS_ACE_FLAG, SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP, SYSTEM_MANDATORY_LABEL_NO_READ_UP,
-    SYSTEM_MANDATORY_LABEL_NO_WRITE_UP
-};
-use winapi::um::winnt::{
-    DELETE, GENERIC_READ, GENERIC_WRITE, GENERIC_ALL, GENERIC_EXECUTE, READ_CONTROL, WRITE_DAC, WRITE_OWNER,
-    MAXIMUM_ALLOWED, SYNCHRONIZE, FILE_WRITE_ATTRIBUTES, FILE_READ_ATTRIBUTES, FILE_DELETE_CHILD, FILE_EXECUTE,
-    FILE_WRITE_EA, FILE_READ_EA, FILE_APPEND_DATA, FILE_WRITE_DATA, FILE_READ_DATA, STANDARD_RIGHTS_ALL,
-    SPECIFIC_RIGHTS_ALL, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_ALL_ACCESS
-};
+
+#[derive(Clone,Copy,PartialEq)]
+pub enum ObjectType {
+    Unknown = 0,
+    FileObject,
+    ServiceObject,
+    PrinterObject,
+    RegistryKey,
+    LmShare,
+    KernelObject,
+    WindowObject,
+    DsObject,
+    DsObjectAll,
+    ProviderDefinedObject,
+    WmiGuidObject,
+    RegistryWow6432Key
+}
 
 #[derive(Clone,Copy,PartialEq)]
 pub enum AceType {
@@ -62,17 +68,40 @@ pub enum AceType {
 }
 
 pub struct ACLEntry {
-    entry_type: AceType,
-    size: WORD,
-    flags: BYTE,
-    mask: ACCESS_MASK,
-    sid: Option<Vec<u16>>,
+    pub index: u16,
+    pub entry_type: AceType,
+    pub size: WORD,
+    pub flags: BYTE,
+    pub mask: ACCESS_MASK,
+    pub sid: Option<Vec<u16>>,
 }
 
 pub struct ACL {
     descriptor: Option<SecurityDescriptor>,
     path: String,
     include_sacl: bool,
+    object_type: ObjectType
+}
+
+impl fmt::Display for ObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let obj_type = match *self {
+            ObjectType::Unknown => "Unknown",
+            ObjectType::FileObject => "FileObject",
+            ObjectType::ServiceObject => "ServiceObject",
+            ObjectType::PrinterObject => "PrinterObject",
+            ObjectType::RegistryKey => "RegistryKey",
+            ObjectType::LmShare => "LmShare",
+            ObjectType::KernelObject => "KernelObject",
+            ObjectType::WindowObject => "WindowObject",
+            ObjectType::DsObject => "DsObject",
+            ObjectType::DsObjectAll => "DsObjectAll",
+            ObjectType::ProviderDefinedObject => "ProviderDefinedObject",
+            ObjectType::WmiGuidObject => "WmiGuidObject",
+            ObjectType::RegistryWow6432Key => "RegistryWow6432Key"
+        };
+        write!(f, "{}", obj_type)
+    }
 }
 
 impl fmt::Display for AceType {
@@ -95,108 +124,6 @@ impl fmt::Display for AceType {
             AceType::SystemResourceAttribute => "SystemResourceAttribute"
         };
         write!(f, "{}", entry_type)
-    }
-}
-
-impl fmt::Display for ACLEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let sid_string = match self.sid {
-            Some(ref sid) => {
-                sid_to_string((*sid).as_ptr() as PSID).unwrap_or_else(
-                    |code| "BadFormat".to_string()
-                )
-            },
-            None => "None".to_string()
-        };
-        let mut flags: String = String::new();
-        let defined_flags = [
-            (CONTAINER_INHERIT_ACE, "ContainerInheritAce"),
-            (FAILED_ACCESS_ACE_FLAG, "FailedAccessAce"),
-            (INHERIT_ONLY_ACE, "InheritOnlyAce"),
-            (INHERITED_ACE, "InheritedAce"),
-            (NO_PROPAGATE_INHERIT_ACE, "NoPropagateInheritAce"),
-            (OBJECT_INHERIT_ACE, "ObjectInheritAce"),
-            (SUCCESSFUL_ACCESS_ACE_FLAG, "SuccessfulAccessAce")
-        ];
-
-        for &(flag, desc) in &defined_flags {
-            if (self.flags & flag) > 0 {
-                if flags.len() > 0 {
-                    flags += "|"
-                }
-                flags += desc;
-            }
-        }
-
-        let mut masks: String = String::new();
-        if self.entry_type == AceType::SystemMandatoryLabel {
-            let defined_masks = [
-                (SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP, "NoExecUp"),
-                (SYSTEM_MANDATORY_LABEL_NO_READ_UP, "NoReadUp"),
-                (SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, "NoWriteUp")];
-            for &(mask, desc) in &defined_masks {
-                if (self.mask & mask) > 0 {
-                    if masks.len() > 0 {
-                        masks += "|";
-                    }
-                    masks += desc;
-                }
-            }
-        } else {
-            // TODO(andy): Only works for files...
-            let defined_std_rights = [
-                (DELETE, "Delete"),
-                (GENERIC_READ, "GenericRead"),
-                (GENERIC_WRITE, "GenericWrite"),
-                (GENERIC_ALL, "GenericAll"),
-                (GENERIC_EXECUTE, "GenericExec"),
-                (READ_CONTROL, "ReadControl"),
-                (WRITE_DAC, "WriteDac"),
-                (WRITE_OWNER, "WriteOwner"),
-                (MAXIMUM_ALLOWED, "MaxAllowed"),
-                (SYNCHRONIZE, "Synchronize")];
-            let defined_specific_rights = [
-                (FILE_WRITE_ATTRIBUTES, "FileWriteAttr"),
-                (FILE_READ_ATTRIBUTES, "FileReadAttr"),
-                (FILE_DELETE_CHILD, "FileDeleteChild"),
-                (FILE_EXECUTE, "FileExecuteOrTraverse"),
-                (FILE_WRITE_EA, "FileWriteEa"),
-                (FILE_READ_EA, "FileReadEa"),
-                (FILE_APPEND_DATA, "FileAppendDataOrAddSubDir"),
-                (FILE_WRITE_DATA, "FileWriteDataOrAddFile"),
-                (FILE_READ_DATA, "FileReadDataOrListDir")
-            ];
-            if (self.mask & STANDARD_RIGHTS_ALL) == STANDARD_RIGHTS_ALL {
-                masks += "StandardRightsAll";
-            } else {
-                for &(mask, desc) in &defined_std_rights {
-                    if (self.mask & mask) > 0 {
-                        if masks.len() > 0 {
-                            masks += "|";
-                        }
-                        masks += desc;
-                    }
-                }
-            }
-
-            if (self.mask & FILE_ALL_ACCESS) == FILE_ALL_ACCESS {
-                if masks.len() > 0 {
-                    masks += "|";
-                }
-                masks += "FileAllAccess";
-            } else {
-                for &(mask, desc) in &defined_specific_rights {
-                    if (self.mask & mask) > 0 {
-                        if masks.len() > 0 {
-                            masks += "|";
-                        }
-                        masks += desc;
-                    }
-                }
-            }
-        }
-
-        write!(f, "Type={}\n  Flags={}\n  RawMask={:X}\n  Mask={}\n  Sid={}\n", self.entry_type, flags, self.mask, masks, sid_string)
     }
 }
 
@@ -237,6 +164,7 @@ fn enumerate_acl_entries<T: EntryCallback>(pAcl: PACL, callback: &mut T) -> bool
         }
 
         let mut entry = ACLEntry {
+            index: i,
             entry_type: AceType::Unknown,
             size: 0,
             flags: 0,
@@ -371,6 +299,22 @@ impl EntryCallback for RemoveEntryCallback {
 
 impl ACL {
     pub fn from_path(path: &str, object_type: SE_OBJECT_TYPE, get_sacl: bool) -> Result<ACL, DWORD> {
+        let obj_type = match object_type {
+            SE_FILE_OBJECT => ObjectType::FileObject,
+            SE_SERVICE => ObjectType::ServiceObject,
+            SE_PRINTER => ObjectType::PrinterObject,
+            SE_REGISTRY_KEY => ObjectType::RegistryKey,
+            SE_LMSHARE => ObjectType::LmShare,
+            SE_KERNEL_OBJECT => ObjectType::KernelObject,
+            SE_WINDOW_OBJECT => ObjectType::WindowObject,
+            SE_DS_OBJECT => ObjectType::DsObject,
+            SE_DS_OBJECT_ALL => ObjectType::DsObjectAll,
+            SE_PROVIDER_DEFINED_OBJECT => ObjectType::ProviderDefinedObject,
+            SE_WMIGUID_OBJECT => ObjectType::WmiGuidObject,
+            SE_REGISTRY_WOW64_32KEY => ObjectType::RegistryWow6432Key,
+            _ => ObjectType::Unknown
+        };
+
         Ok(ACL {
             descriptor: match SecurityDescriptor::from_path(path, object_type, get_sacl) {
                 Ok(s) => Some(s),
@@ -378,6 +322,7 @@ impl ACL {
             },
             path: path.to_owned(),
             include_sacl: get_sacl,
+            object_type: obj_type
         })
     }
 
@@ -396,6 +341,10 @@ impl ACL {
         } else {
             ACL::from_path(path, SE_REGISTRY_KEY, get_sacl)
         }
+    }
+
+    pub fn object_type(&self) -> ObjectType {
+        self.object_type
     }
 
     pub fn all(&self) -> Result<Vec<ACLEntry>, DWORD> {
