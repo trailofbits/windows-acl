@@ -241,6 +241,7 @@ struct AddEntryCallback {}
 struct RemoveEntryCallback {
     target: PSID,
     target_type: Option<AceType>,
+    flags: Option<DWORD>
 }
 
 impl EntryCallback for GetEntryCallback {
@@ -250,7 +251,11 @@ impl EntryCallback for GetEntryCallback {
             None => NULL as PSID
         };
 
-        if pSid != NULL && (unsafe { EqualSid(self.target, pSid) } != 0) {
+        if pSid == NULL {
+            return false;
+        }
+
+        if unsafe { EqualSid(self.target, pSid) } != 0 {
             if let Some(ref t) = self.target_type {
                 if entry.entry_type != *t {
                     return true;
@@ -267,7 +272,6 @@ impl EntryCallback for GetEntryCallback {
 impl EntryCallback for AllEntryCallback {
     fn on_entry(&mut self, hdr: PACE_HEADER, entry: ACLEntry) -> bool {
         self.entries.push(entry);
-
         true
     }
 }
@@ -287,13 +291,30 @@ impl EntryCallback for RemoveEntryCallback {
             None => NULL as PSID
         };
 
-        if let Some(ref t) = self.target_type {
-            if entry.entry_type != *t {
-                // TODO(andy):
+        if pSid == NULL {
+            return false;
+        }
+
+        if unsafe { EqualSid(self.target, pSid) } != 0 {
+            if let Some(ref t) = self.target_type {
+                if entry.entry_type == *t {
+                    if let Some(mask) = self.flags {
+                        if (entry.flags & mask) == mask {
+                            // NOTE(andy) sid, entry_type, and flag mask all match, remove it!
+                            return true;
+                        }
+                    } else {
+                        // NOTE(andy): We don't have a flags mask to search for so since the entry_type and sid match
+                        //             this is an item we want to remove
+                        return true;
+                    }
+                }
+
+                // TODO(andy): Call AddAce here
             }
         }
 
-        false
+        true
     }
 }
 
