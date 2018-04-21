@@ -8,44 +8,43 @@ use std::ops::Drop;
 use std::os::windows::ffi::OsStrExt;
 use widestring::WideString;
 use winapi::shared::minwindef::{
-    DWORD, FALSE, HLOCAL, PDWORD
+    BYTE, DWORD, FALSE, HLOCAL, PDWORD, TRUE,
 };
 use winapi::shared::ntdef::{
-    LPCWSTR, LPWSTR, HANDLE, NULL
+    LPCWSTR, LPWSTR, HANDLE, NULL,
 };
-use winapi::shared::sddl::{
-    ConvertSidToStringSidW
-};
+use winapi::shared::sddl::ConvertSidToStringSidW;
 use winapi::shared::winerror::{
     ERROR_NOT_ALL_ASSIGNED,
-    ERROR_SUCCESS
+    ERROR_SUCCESS,
 };
 use winapi::um::accctrl::{
-  SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
-  SE_SERVICE
+    SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
+    SE_SERVICE,
 };
 use winapi::um::aclapi::{
-    GetNamedSecurityInfoW, SetNamedSecurityInfoW
+    GetNamedSecurityInfoW, SetNamedSecurityInfoW,
 };
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::handleapi::{
-    CloseHandle, INVALID_HANDLE_VALUE
+    CloseHandle, INVALID_HANDLE_VALUE,
 };
 use winapi::um::minwinbase::LPTR;
 use winapi::um::processthreadsapi::{
-    GetCurrentProcess, OpenProcessToken
+    GetCurrentProcess, OpenProcessToken,
 };
 use winapi::um::securitybaseapi::{
-    AdjustTokenPrivileges, InitializeAcl, InitializeSecurityDescriptor
+    AdjustTokenPrivileges, InitializeAcl, InitializeSecurityDescriptor, SetSecurityDescriptorDacl,
+    SetSecurityDescriptorSacl
 };
 use winapi::um::winbase::{
-    LocalAlloc, LocalFree, LookupPrivilegeValueW
+    LocalAlloc, LocalFree, LookupPrivilegeValueW,
 };
 use winapi::um::winnt::{
     DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, LUID_AND_ATTRIBUTES,
     OWNER_SECURITY_INFORMATION, PACL, PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES,
     SECURITY_DESCRIPTOR_MIN_LENGTH, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED,
-    SECURITY_DESCRIPTOR_REVISION, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY
+    SECURITY_DESCRIPTOR_REVISION, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
 };
 
 pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
@@ -56,7 +55,7 @@ pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
     }
 
     let raw_string_sid_len = unsafe { libc::wcslen(raw_string_sid) };
-    let sid_string = unsafe { WideString::from_ptr(raw_string_sid, raw_string_sid_len)};
+    let sid_string = unsafe { WideString::from_ptr(raw_string_sid, raw_string_sid_len) };
 
     unsafe { LocalFree(raw_string_sid as HLOCAL) };
 
@@ -86,7 +85,7 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
         OpenProcessToken(GetCurrentProcess(),
                          TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY,
                          &mut hToken)
-       } == 0 {
+    } == 0 {
         return Err(unsafe { GetLastError() });
     }
 
@@ -141,16 +140,17 @@ impl Drop for SystemPrivilege {
 
 pub struct SecurityDescriptor {
     pSecurityDescriptor: PSECURITY_DESCRIPTOR,
+    from_source: bool,
     pub pDacl: PACL,
     pub pSacl: PACL,
     psidOwner: PSID,
     psidGroup: PSID,
-    privilege: Option<SystemPrivilege>
+    privilege: Option<SystemPrivilege>,
 }
 
 impl SecurityDescriptor {
     pub fn from_path(path: &str, obj_type: SE_OBJECT_TYPE, get_sacl: bool)
-        -> Result<SecurityDescriptor, DWORD> {
+                     -> Result<SecurityDescriptor, DWORD> {
         let mut ret: DWORD = 0;
         let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
 
@@ -176,7 +176,7 @@ impl SecurityDescriptor {
                 &mut obj.psidGroup,
                 &mut obj.pDacl,
                 &mut obj.pSacl,
-                &mut obj.pSecurityDescriptor
+                &mut obj.pSecurityDescriptor,
             )
         };
         if ret != ERROR_SUCCESS {
@@ -197,7 +197,8 @@ impl SecurityDescriptor {
             pSacl: NULL as PACL,
             psidOwner: NULL,
             psidGroup: NULL,
-            privilege: None
+            privilege: None,
+            from_source: true,
         }
     }
 
@@ -211,17 +212,38 @@ impl SecurityDescriptor {
 
         if unsafe {
             InitializeSecurityDescriptor(pSecurityDescriptor, SECURITY_DESCRIPTOR_REVISION)
-           } == 0 {
+        } == 0 {
             unsafe {
                 LocalFree(pSecurityDescriptor)
             };
             return Err(unsafe { GetLastError() });
         }
 
-        Ok(SecurityDescriptor::default())
+        let mut obj = SecurityDescriptor::default();
+        obj.pSecurityDescriptor = pSecurityDescriptor;
+        obj.from_source = false;
+        Ok(obj)
+    }
+
+    pub fn set_dacl(&mut self, acl_buf: &Vec<BYTE>) -> bool {
+        if unsafe {
+            SetSecurityDescriptorDacl(self.pSecurityDescriptor,
+                                      TRUE,
+                                      acl_buf.as_ptr() as PACL, // TODO: This is referenced, we need to copy this data
+                                      FALSE)
+        } == 0 {
+            return false;
+        }
+
+        true
+    }
+
+    pub fn set_sacl(&mut self, acl_buf: &Vec<BYTE>) -> bool {
+        false
     }
 
     // TODO(andy): We need a commit/apply function which bakes the security descriptor into
+    pub fn apply(&mut self, path: &str) {}
 }
 
 impl Drop for SecurityDescriptor {
