@@ -28,6 +28,7 @@ use winapi::um::winnt::{
     SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE, SYSTEM_AUDIT_OBJECT_ACE, SYSTEM_AUDIT_OBJECT_ACE_TYPE,
     SYSTEM_MANDATORY_LABEL_ACE, SYSTEM_MANDATORY_LABEL_ACE_TYPE, SYSTEM_RESOURCE_ATTRIBUTE_ACE,
     SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE, MAXDWORD, ACL_REVISION, AclSizeInformation, ACL_SIZE_INFORMATION,
+    CONTAINER_INHERIT_ACE, OBJECT_INHERIT_ACE
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -521,20 +522,39 @@ impl ACL {
 
     // TODO(andy): For initial version, we do not support object, conditional ACEs
 
-    pub fn add_entry(&mut self, sid: PSID, entry_type: AceType, flags: BYTE, mask: DWORD) {
-        // TODO(andy): Depending on entry_type, create the appropriate callback
+    pub fn reload(&mut self) -> bool {
+        self.descriptor = SecurityDescriptor::from_path(&self.path, self.object_type().into(), self.include_sacl).ok();
 
-        // TODO(andy): Create SecurityDescriptor
-        // TODO(andy): Add ACL to SecurityDescriptor
+        self.descriptor.is_some()
+    }
+
+    pub fn add_entry(&mut self, sid: PSID, entry_type: AceType, flags: BYTE, mask: DWORD) {
+        if let Some(ref mut descriptor) = self.descriptor {
+            let mut is_dacl = false;
+            let mut acl: PACL = match entry_type {
+                AceType::AccessAllow | AceType::AccessDeny => {
+                    is_dacl = true;
+                    descriptor.pDacl
+                },
+                AceType::SystemAudit | AceType::SystemMandatoryLabel | AceType::SystemResourceAttribute => descriptor.pSacl,
+                _ => {} // TODO(andy): Unsupported AceType
+            };
+
+
+        }
+        // TODO(andy): Depending on entry_type, create the appropriate callback
         // TODO(andy): Apply SecurityDescriptor to self.path
 
-        // TODO(andy): Replace current SecurityDescriptor with a new one opened with from_path
+        if !self.reload() {
+            // TODO(andy): return some sort of error
+        }
     }
 
     pub fn remove_entry(&mut self, sid: PSID, entry_type: Option<AceType>, flags: Option<BYTE>) -> Result<usize, DWORD> {
         let mut removed_entries = 0;
+        let object_type = self.object_type().into();
 
-        if let Some(ref descriptor) = self.descriptor {
+        if let Some(ref mut descriptor) = self.descriptor {
             let mut dacl_callback = match RemoveEntryCallback::new(descriptor.pDacl, sid, entry_type, flags) {
                 Some(obj) => obj,
                 None => return Err(unsafe { GetLastError() })
@@ -555,12 +575,24 @@ impl ACL {
             }
             removed_entries += sacl_callback.removed;
 
-            // TODO(andy): Create SecurityDescriptor
-            // TODO(andy): Add DACL to SecurityDescriptor if appropriate
-            // TODO(andy): Add SACL to SecurityDescriptor if appropriate
-            // TODO(andy): Apply SecurityDescriptor to self.path
+            let mut dacl: Option<PACL> = None;
+            let mut sacl: Option<PACL> = None;
 
-            // TODO(andy): Replace current SecurityDescriptor with a new one opened with from_path
+            if descriptor.pDacl != (NULL as PACL) {
+                dacl = Some(dacl_callback.new_acl.as_mut_ptr() as PACL);
+            }
+
+            if descriptor.pSacl != (NULL as PACL) {
+                sacl = Some(sacl_callback.new_acl.as_mut_ptr() as PACL);
+            }
+
+            if !descriptor.apply(&self.path, object_type, dacl, sacl) {
+                return Err(unsafe { GetLastError() });
+            }
+        }
+
+        if !self.reload() {
+            return Err(unsafe { GetLastError() });
         }
 
         Ok(removed_entries)
@@ -568,32 +600,49 @@ impl ACL {
 
     // NOTE(andy): Simple API
     pub fn allow(&mut self, sid: PSID, inheritable: bool, mask: DWORD) {
-        // TODO(andy): inheritable -> flags
         let mut flags: BYTE = 0;
+
+        if inheritable {
+            flags = CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE;
+        }
         self.add_entry(sid, AceType::AccessAllow, flags, mask)
     }
 
     pub fn deny(&mut self, sid: PSID, inheritable: bool, mask: DWORD) {
-        // TODO(andy): inheritable -> flags
         let mut flags: BYTE = 0;
+
+        if inheritable {
+            flags = CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE;
+        }
         self.add_entry(sid, AceType::AccessDeny, flags, mask)
     }
 
     pub fn audit(&mut self, sid: PSID, inheritable: bool, mask: DWORD, audit_success: bool, audit_fails: bool) {
-        // TODO(andy): create flags based off inheritable, audit_{success, failure}
         let mut flags: BYTE = 0;
+
+        if inheritable {
+            flags = CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE;
+        }
         self.add_entry(sid, AceType::SystemAudit, flags, mask)
     }
 
     pub fn integrity_level(&mut self, label_sid: PSID, inheritable: bool, policy: DWORD) {
         let mut flags: BYTE = 0;
+
+        if inheritable {
+            flags = CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE;
+        }
         self.add_entry(label_sid, AceType::SystemMandatoryLabel, flags, policy)
     }
 
     pub fn remove(&mut self, sid: PSID, entry_type: Option<AceType>, inheritable: Option<bool>) -> Result<usize, DWORD> {
         let mut flags: Option<BYTE> = None;
         if let Some(inherit) = inheritable {
-            if inherit {} else {}
+            if inherit {
+                flags = Some(CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE);
+            } else {
+                flags = None;
+            }
         }
 
         self.remove_entry(sid, entry_type, flags)
