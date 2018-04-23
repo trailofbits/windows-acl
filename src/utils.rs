@@ -200,28 +200,6 @@ impl SecurityDescriptor {
         }
     }
 
-    pub fn new() -> Result<SecurityDescriptor, DWORD> {
-        let pSecurityDescriptor: PSECURITY_DESCRIPTOR = unsafe {
-            LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH)
-        };
-        if pSecurityDescriptor == NULL {
-            return Err(unsafe { GetLastError() });
-        }
-
-        if unsafe {
-            InitializeSecurityDescriptor(pSecurityDescriptor, SECURITY_DESCRIPTOR_REVISION)
-        } == 0 {
-            unsafe {
-                LocalFree(pSecurityDescriptor)
-            };
-            return Err(unsafe { GetLastError() });
-        }
-
-        let mut obj = SecurityDescriptor::default();
-        obj.pSecurityDescriptor = pSecurityDescriptor;
-        Ok(obj)
-    }
-
     // TODO(andy): We need a commit/apply function which bakes the security descriptor into
     pub fn apply(&mut self, path: &str, obj_type: SE_OBJECT_TYPE, dacl: Option<PACL>, sacl: Option<PACL>) -> bool {
         let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();

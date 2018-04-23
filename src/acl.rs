@@ -540,7 +540,7 @@ impl ACL {
                 None => return Err(unsafe { GetLastError() })
             };
 
-            if !enumerate_acl_entries(descriptor.pDacl, &mut dacl_callback) {
+            if descriptor.pDacl != (NULL as PACL) && !enumerate_acl_entries(descriptor.pDacl, &mut dacl_callback) {
                 return Err(unsafe { GetLastError() });
             }
             removed_entries = dacl_callback.removed;
@@ -550,7 +550,7 @@ impl ACL {
                 None => return Err(unsafe { GetLastError() })
             };
 
-            if !enumerate_acl_entries(descriptor.pSacl, &mut sacl_callback) {
+            if descriptor.pSacl != (NULL as PACL) && !enumerate_acl_entries(descriptor.pSacl, &mut sacl_callback) {
                 return Err(unsafe { GetLastError() });
             }
             removed_entries += sacl_callback.removed;
