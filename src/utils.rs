@@ -140,7 +140,6 @@ impl Drop for SystemPrivilege {
 
 pub struct SecurityDescriptor {
     pSecurityDescriptor: PSECURITY_DESCRIPTOR,
-    from_source: bool,
     pub pDacl: PACL,
     pub pSacl: PACL,
     psidOwner: PSID,
@@ -198,7 +197,6 @@ impl SecurityDescriptor {
             psidOwner: NULL,
             psidGroup: NULL,
             privilege: None,
-            from_source: true,
         }
     }
 
@@ -221,29 +219,39 @@ impl SecurityDescriptor {
 
         let mut obj = SecurityDescriptor::default();
         obj.pSecurityDescriptor = pSecurityDescriptor;
-        obj.from_source = false;
         Ok(obj)
     }
 
-    pub fn set_dacl(&mut self, acl_buf: &Vec<BYTE>) -> bool {
+    // TODO(andy): We need a commit/apply function which bakes the security descriptor into
+    pub fn apply(&mut self, path: &str, obj_type: SE_OBJECT_TYPE, dacl: Option<PACL>, sacl: Option<PACL>) -> bool {
+        let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
+        let dacl_ptr = dacl.unwrap_or(NULL as PACL);
+        let sacl_ptr = sacl.unwrap_or(NULL as PACL);
+
+        let mut flags = 0;
+        if dacl_ptr != (NULL as PACL) {
+            flags |= DACL_SECURITY_INFORMATION;
+        }
+
+        if sacl_ptr != (NULL as PACL) {
+            flags |= SACL_SECURITY_INFORMATION;
+        }
+
         if unsafe {
-            SetSecurityDescriptorDacl(self.pSecurityDescriptor,
-                                      TRUE,
-                                      acl_buf.as_ptr() as PACL, // TODO: This is referenced, we need to copy this data
-                                      FALSE)
-        } == 0 {
+            SetNamedSecurityInfoW(
+                wPath.as_mut_ptr(),
+                obj_type,
+                flags,
+                NULL as PSID,
+                NULL as PSID,
+                dacl_ptr,
+                sacl_ptr
+            ) } != 0 {
             return false;
         }
 
         true
     }
-
-    pub fn set_sacl(&mut self, acl_buf: &Vec<BYTE>) -> bool {
-        false
-    }
-
-    // TODO(andy): We need a commit/apply function which bakes the security descriptor into
-    pub fn apply(&mut self, path: &str) {}
 }
 
 impl Drop for SecurityDescriptor {
