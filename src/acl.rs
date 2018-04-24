@@ -5,17 +5,18 @@ use std::fmt;
 use std::mem;
 use utils::SecurityDescriptor;
 use winapi::shared::minwindef::{
-    BYTE, DWORD, LPVOID, WORD,
+    BYTE, DWORD, LPVOID, WORD, FALSE,
 };
 use winapi::shared::ntdef::NULL;
 use winapi::um::accctrl::{
     SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
     SE_SERVICE, SE_UNKNOWN_OBJECT_TYPE, SE_PRINTER, SE_LMSHARE, SE_DS_OBJECT, SE_DS_OBJECT_ALL,
-    SE_PROVIDER_DEFINED_OBJECT, SE_WINDOW_OBJECT, SE_WMIGUID_OBJECT
+    SE_PROVIDER_DEFINED_OBJECT, SE_WINDOW_OBJECT, SE_WMIGUID_OBJECT,
 };
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::securitybaseapi::{
     AddAce, CopySid, EqualSid, GetAce, GetAclInformation, GetLengthSid, IsValidAcl, IsValidSid,
+    AddAccessAllowedAceEx, AddAccessDeniedAceEx, AddAuditAccessAceEx, AddMandatoryAce, AddResourceAttributeAce,
 };
 use winapi::um::winnt::{
     ACCESS_ALLOWED_ACE, ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE,
@@ -28,7 +29,8 @@ use winapi::um::winnt::{
     SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE, SYSTEM_AUDIT_OBJECT_ACE, SYSTEM_AUDIT_OBJECT_ACE_TYPE,
     SYSTEM_MANDATORY_LABEL_ACE, SYSTEM_MANDATORY_LABEL_ACE_TYPE, SYSTEM_RESOURCE_ATTRIBUTE_ACE,
     SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE, MAXDWORD, ACL_REVISION, AclSizeInformation, ACL_SIZE_INFORMATION,
-    CONTAINER_INHERIT_ACE, OBJECT_INHERIT_ACE
+    CONTAINER_INHERIT_ACE, OBJECT_INHERIT_ACE, SUCCESSFUL_ACCESS_ACE_FLAG, FAILED_ACCESS_ACE_FLAG,
+    INHERITED_ACE,
 };
 
 #[derive(Clone, Copy, PartialEq)]
@@ -326,7 +328,12 @@ struct AllEntryCallback {
 }
 
 struct AddEntryCallback {
-    new_acl: Vec<BYTE>
+    new_acl: Vec<BYTE>,
+    entry_sid: PSID,
+    entry_type: AceType,
+    entry_flags: BYTE,
+    entry_mask: DWORD,
+    already_added: bool,
 }
 
 struct RemoveEntryCallback {
@@ -376,16 +383,129 @@ impl AddEntryCallback {
         new_acl_size += unsafe { GetLengthSid(sid) as usize } - mem::size_of::<DWORD>();
 
         Some(AddEntryCallback {
-            new_acl: Vec::with_capacity(new_acl_size)
+            new_acl: Vec::with_capacity(new_acl_size),
+            entry_sid: sid,
+            entry_type,
+            entry_flags: flags,
+            entry_mask: mask,
+            already_added: false,
         })
+    }
+
+    fn insert_entry(&mut self) -> bool {
+        let status = match self.entry_type {
+            AceType::AccessAllow => {
+                unsafe {
+                    AddAccessAllowedAceEx(
+                        self.new_acl.as_mut_ptr() as PACL,
+                        ACL_REVISION as DWORD,
+                        self.entry_flags as DWORD,
+                        self.entry_mask,
+                        self.entry_sid,
+                    )
+                }
+            }
+            AceType::AccessDeny => {
+                unsafe {
+                    AddAccessDeniedAceEx(
+                        self.new_acl.as_mut_ptr() as PACL,
+                        ACL_REVISION as DWORD,
+                        self.entry_flags as DWORD,
+                        self.entry_mask,
+                        self.entry_sid,
+                    )
+                }
+            }
+            AceType::SystemAudit => {
+                unsafe {
+                    AddAuditAccessAceEx(
+                        self.new_acl.as_mut_ptr() as PACL,
+                        ACL_REVISION as DWORD,
+                        self.entry_flags as DWORD,
+                        self.entry_mask,
+                        self.entry_sid,
+                        FALSE,
+                        FALSE,
+                    )
+                }
+            }
+            AceType::SystemMandatoryLabel => {
+                unsafe {
+                    AddMandatoryAce(
+                        self.new_acl.as_mut_ptr() as PACL,
+                        ACL_REVISION as DWORD,
+                        self.entry_flags as DWORD,
+                        self.entry_mask,
+                        self.entry_sid,
+                    )
+                }
+            }
+            _ => 0
+        };
+
+        status != 0
     }
 }
 
 impl EntryCallback for AddEntryCallback {
     fn on_entry(&mut self, hdr: PACE_HEADER, entry: ACLEntry) -> bool {
-        // TODO(andy):
+        // NOTE(andy): Our assumption here is that the access control list are in the proper order
+        //             See https://msdn.microsoft.com/en-us/library/windows/desktop/aa379298(v=vs.85).aspx
 
-        false
+        if !self.already_added {
+            if (entry.flags & INHERITED_ACE) == 0 {
+                if let Some(sid) = entry.sid {
+                    if entry.entry_type == self.entry_type &&
+                        unsafe { EqualSid(sid.as_ptr() as PSID, self.entry_sid) } != 0 {
+                        // NOTE(andy): We found an entry that matches the type and sid of the one we were going
+                        //             to add (uninherited). Instead of adding the old one and the new one, we
+                        //             replace the old entry with the new entry.
+                        if !self.insert_entry() {
+                            return false;
+                        }
+                        self.already_added = true;
+
+                        // NOTE(andy): Since we are replacing the matching entry, return true and exit the current
+                        //             entry handler
+                        return true;
+                    }
+                }
+
+                if entry.entry_type == AceType::AccessAllow &&
+                    self.entry_type == AceType::AccessDeny {
+                    // NOTE(andy): Assuming proper ordering, we just hit an uninherited access allowed ACE while
+                    //             trying to add an access deny ACE. This implies that we just reached the end of
+                    //             the deny ACEs. We should add the deny ACE here.
+                    if !self.insert_entry() {
+                        return false;
+                    }
+                    self.already_added = true;
+                }
+            } else {
+                // NOTE(andy): Assuming proper ordering, our enumeration hit an inherited ACE while trying
+                //             to add an access allowed, access denied, audit, or mandatory label ACE. This
+                //             implies that we reached the end of the explicit ACEs. It is a good place to
+                //             add access allowed, access denied, audit, or mandatory label ACE.
+                if !self.insert_entry() {
+                    return false;
+                }
+                self.already_added = true;
+            }
+        }
+
+        if unsafe {
+            AddAce(
+                self.new_acl.as_mut_ptr() as PACL,
+                ACL_REVISION as DWORD,
+                MAXDWORD,
+                hdr as LPVOID,
+                (*hdr).AceSize as DWORD,
+            )
+        } == 0 {
+            return false;
+        }
+
+        true
     }
 }
 
@@ -528,26 +648,51 @@ impl ACL {
         self.descriptor.is_some()
     }
 
-    pub fn add_entry(&mut self, sid: PSID, entry_type: AceType, flags: BYTE, mask: DWORD) {
+    pub fn add_entry(&mut self, sid: PSID, entry_type: AceType, flags: BYTE, mask: DWORD) -> Result<bool, DWORD> {
+        let object_type = self.object_type();
         if let Some(ref mut descriptor) = self.descriptor {
             let mut is_dacl = false;
             let mut acl: PACL = match entry_type {
                 AceType::AccessAllow | AceType::AccessDeny => {
                     is_dacl = true;
                     descriptor.pDacl
-                },
-                AceType::SystemAudit | AceType::SystemMandatoryLabel | AceType::SystemResourceAttribute => descriptor.pSacl,
-                _ => {} // TODO(andy): Unsupported AceType
+                }
+                AceType::SystemAudit | AceType::SystemMandatoryLabel => descriptor.pSacl,
+                _ => { return Err(0); }
             };
 
+            let mut add_callback = match AddEntryCallback::new(acl, sid, entry_type, flags, mask) {
+                Some(obj) => obj,
+                None => { return Err(unsafe { GetLastError() }); }
+            };
 
+            if acl != (NULL as PACL) && !enumerate_acl_entries(acl, &mut add_callback) {
+                return Err(unsafe { GetLastError() });
+            }
+
+            // NOTE(andy): After enumerating the ACL, we still did not add our ACL, at this point, add it to the end
+            if !add_callback.already_added && !add_callback.insert_entry() {
+                return Err(unsafe { GetLastError() });
+            }
+            add_callback.already_added = true;
+
+            let mut status = false;
+            if is_dacl {
+                status = descriptor.apply(&self.path, object_type.into(), Some(acl), None);
+            } else {
+                status = descriptor.apply(&self.path, object_type.into(), None, Some(acl));
+            }
+
+            if !status {
+                return Err(unsafe { GetLastError() });
+            }
         }
-        // TODO(andy): Depending on entry_type, create the appropriate callback
-        // TODO(andy): Apply SecurityDescriptor to self.path
 
         if !self.reload() {
-            // TODO(andy): return some sort of error
+            return Err(unsafe { GetLastError() });
         }
+
+        Ok(true)
     }
 
     pub fn remove_entry(&mut self, sid: PSID, entry_type: Option<AceType>, flags: Option<BYTE>) -> Result<usize, DWORD> {
@@ -599,7 +744,7 @@ impl ACL {
     }
 
     // NOTE(andy): Simple API
-    pub fn allow(&mut self, sid: PSID, inheritable: bool, mask: DWORD) {
+    pub fn allow(&mut self, sid: PSID, inheritable: bool, mask: DWORD) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
         if inheritable {
@@ -608,7 +753,7 @@ impl ACL {
         self.add_entry(sid, AceType::AccessAllow, flags, mask)
     }
 
-    pub fn deny(&mut self, sid: PSID, inheritable: bool, mask: DWORD) {
+    pub fn deny(&mut self, sid: PSID, inheritable: bool, mask: DWORD) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
         if inheritable {
@@ -617,16 +762,25 @@ impl ACL {
         self.add_entry(sid, AceType::AccessDeny, flags, mask)
     }
 
-    pub fn audit(&mut self, sid: PSID, inheritable: bool, mask: DWORD, audit_success: bool, audit_fails: bool) {
+    pub fn audit(&mut self, sid: PSID, inheritable: bool, mask: DWORD, audit_success: bool, audit_fails: bool) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
         if inheritable {
             flags = CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE;
         }
+
+        if audit_success {
+            flags |= SUCCESSFUL_ACCESS_ACE_FLAG;
+        }
+
+        if audit_fails {
+            flags |= FAILED_ACCESS_ACE_FLAG;
+        }
+
         self.add_entry(sid, AceType::SystemAudit, flags, mask)
     }
 
-    pub fn integrity_level(&mut self, label_sid: PSID, inheritable: bool, policy: DWORD) {
+    pub fn integrity_level(&mut self, label_sid: PSID, inheritable: bool, policy: DWORD) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
         if inheritable {
