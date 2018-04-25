@@ -8,7 +8,7 @@ use std::ops::Drop;
 use std::os::windows::ffi::OsStrExt;
 use widestring::WideString;
 use winapi::shared::minwindef::{
-    BYTE, DWORD, FALSE, HLOCAL, PDWORD, TRUE,
+    DWORD, FALSE, HLOCAL, PDWORD
 };
 use winapi::shared::ntdef::{
     LPCWSTR, LPWSTR, HANDLE, NULL,
@@ -18,6 +18,8 @@ use winapi::shared::winerror::{
     ERROR_NOT_ALL_ASSIGNED,
     ERROR_SUCCESS,
 };
+
+#[allow(unused_imports)]
 use winapi::um::accctrl::{
     SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
     SE_SERVICE,
@@ -29,22 +31,17 @@ use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::handleapi::{
     CloseHandle, INVALID_HANDLE_VALUE,
 };
-use winapi::um::minwinbase::LPTR;
 use winapi::um::processthreadsapi::{
     GetCurrentProcess, OpenProcessToken,
 };
 use winapi::um::securitybaseapi::{
-    AdjustTokenPrivileges, InitializeAcl, InitializeSecurityDescriptor, SetSecurityDescriptorDacl,
-    SetSecurityDescriptorSacl
+    AdjustTokenPrivileges
 };
 use winapi::um::winbase::{
-    LocalAlloc, LocalFree, LookupPrivilegeValueW,
+    LocalFree, LookupPrivilegeValueW,
 };
 use winapi::um::winnt::{
-    DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, LUID_AND_ATTRIBUTES,
-    OWNER_SECURITY_INFORMATION, PACL, PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES,
-    SECURITY_DESCRIPTOR_MIN_LENGTH, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED,
-    SECURITY_DESCRIPTOR_REVISION, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+    DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PACL, PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
 };
 
 pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
@@ -61,6 +58,8 @@ pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
 
     Ok(sid_string.to_string_lossy())
 }
+
+// TODO(andy): Implement string_to_sid and also name_to_sid
 
 fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
     let mut tkp = unsafe { mem::zeroed::<TOKEN_PRIVILEGES>() };
@@ -150,7 +149,6 @@ pub struct SecurityDescriptor {
 impl SecurityDescriptor {
     pub fn from_path(path: &str, obj_type: SE_OBJECT_TYPE, get_sacl: bool)
                      -> Result<SecurityDescriptor, DWORD> {
-        let mut ret: DWORD = 0;
         let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
 
         let mut obj = SecurityDescriptor::default();
@@ -166,7 +164,7 @@ impl SecurityDescriptor {
             flags |= SACL_SECURITY_INFORMATION;
         }
 
-        ret = unsafe {
+        let ret = unsafe {
             GetNamedSecurityInfoW(
                 wPath.as_ptr(),
                 obj_type,
@@ -223,8 +221,9 @@ impl SecurityDescriptor {
                 NULL as PSID,
                 NULL as PSID,
                 dacl_ptr,
-                sacl_ptr
-            ) } != 0 {
+                sacl_ptr,
+            )
+        } != 0 {
             return false;
         }
 

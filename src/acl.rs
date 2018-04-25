@@ -1,6 +1,8 @@
 #![allow(non_snake_case)]
 
+#[allow(unused_imports)]
 use field_offset::*;
+
 use std::fmt;
 use std::mem;
 use utils::SecurityDescriptor;
@@ -16,7 +18,7 @@ use winapi::um::accctrl::{
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::securitybaseapi::{
     AddAce, CopySid, EqualSid, GetAce, GetAclInformation, GetLengthSid, IsValidAcl, IsValidSid,
-    AddAccessAllowedAceEx, AddAccessDeniedAceEx, AddAuditAccessAceEx, AddMandatoryAce, AddResourceAttributeAce,
+    AddAccessAllowedAceEx, AddAccessDeniedAceEx, AddAuditAccessAceEx, AddMandatoryAce,
 };
 use winapi::um::winnt::{
     ACCESS_ALLOWED_ACE, ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE,
@@ -345,7 +347,7 @@ struct RemoveEntryCallback {
 }
 
 impl EntryCallback for GetEntryCallback {
-    fn on_entry(&mut self, hdr: PACE_HEADER, entry: ACLEntry) -> bool {
+    fn on_entry(&mut self, _hdr: PACE_HEADER, entry: ACLEntry) -> bool {
         let pSid: PSID = match entry.sid {
             Some(ref sid) => sid.as_ptr() as PSID,
             None => NULL as PSID
@@ -370,7 +372,7 @@ impl EntryCallback for GetEntryCallback {
 }
 
 impl EntryCallback for AllEntryCallback {
-    fn on_entry(&mut self, hdr: PACE_HEADER, entry: ACLEntry) -> bool {
+    fn on_entry(&mut self, _hdr: PACE_HEADER, entry: ACLEntry) -> bool {
         self.entries.push(entry);
         true
     }
@@ -676,7 +678,7 @@ impl ACL {
             }
             add_callback.already_added = true;
 
-            let mut status = false;
+            let status: bool;
             if is_dacl {
                 status = descriptor.apply(&self.path, object_type.into(), Some(acl), None);
             } else {

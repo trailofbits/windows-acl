@@ -14,7 +14,7 @@ use winapi::um::winnt::{
     DELETE, GENERIC_READ, GENERIC_WRITE, GENERIC_ALL, GENERIC_EXECUTE, READ_CONTROL, WRITE_DAC, WRITE_OWNER,
     MAXIMUM_ALLOWED, SYNCHRONIZE, FILE_WRITE_ATTRIBUTES, FILE_READ_ATTRIBUTES, FILE_DELETE_CHILD, FILE_EXECUTE,
     FILE_WRITE_EA, FILE_READ_EA, FILE_APPEND_DATA, FILE_WRITE_DATA, FILE_READ_DATA, STANDARD_RIGHTS_ALL,
-    SPECIFIC_RIGHTS_ALL, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_ALL_ACCESS
+    FILE_GENERIC_EXECUTE, FILE_GENERIC_READ, FILE_GENERIC_WRITE, FILE_ALL_ACCESS
 };
 use windows_acl::acl::{
     ACL, ACLEntry, AceType, ObjectType,
@@ -27,7 +27,7 @@ fn process_entry(acl: &ACL, ent: &ACLEntry) {
     let sid_string = match ent.sid {
         Some(ref sid) => {
             sid_to_string((*sid).as_ptr() as PSID).unwrap_or_else(
-                |code| "BadFormat".to_string()
+                | _ | "BadFormat".to_string()
             )
         }
         None => "None".to_string()
@@ -179,7 +179,7 @@ pub fn main() {
         .get_matches();
 
     let path = matches.value_of("path").unwrap();
-    let mut acl: Option<ACL> = None;
+    let acl: Option<ACL>;
 
     if matches.is_present("registry") {
         acl = ACL::from_registry_path(path, false, true).or_else(
