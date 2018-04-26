@@ -1,4 +1,4 @@
-
+/support/query_test
 /target
 **/*.rs.bk
 Cargo.lock

@@ -8,12 +8,14 @@ use std::ops::Drop;
 use std::os::windows::ffi::OsStrExt;
 use widestring::WideString;
 use winapi::shared::minwindef::{
-    DWORD, FALSE, HLOCAL, PDWORD
+    BYTE, DWORD, FALSE, HLOCAL, PDWORD
 };
 use winapi::shared::ntdef::{
     LPCWSTR, LPWSTR, HANDLE, NULL,
 };
-use winapi::shared::sddl::ConvertSidToStringSidW;
+use winapi::shared::sddl::{
+    ConvertSidToStringSidW, ConvertStringSidToSidW
+};
 use winapi::shared::winerror::{
     ERROR_NOT_ALL_ASSIGNED,
     ERROR_SUCCESS,
@@ -35,7 +37,7 @@ use winapi::um::processthreadsapi::{
     GetCurrentProcess, OpenProcessToken,
 };
 use winapi::um::securitybaseapi::{
-    AdjustTokenPrivileges
+    AdjustTokenPrivileges, CopySid, GetLengthSid
 };
 use winapi::um::winbase::{
     LocalFree, LookupPrivilegeValueW,
@@ -59,7 +61,31 @@ pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
     Ok(sid_string.to_string_lossy())
 }
 
-// TODO(andy): Implement string_to_sid and also name_to_sid
+// TODO(andy): Implement function to look up SID from an username
+pub fn string_to_sid(string_sid: &str) -> Result<Vec<BYTE>, DWORD> {
+    let mut sid: PSID = NULL as PSID;
+    let raw_string_sid: Vec<u16> = OsStr::new(string_sid)
+        .encode_wide()
+        .chain(once(0))
+        .collect();
+
+    if unsafe { ConvertStringSidToSidW(raw_string_sid.as_ptr(), &mut sid) } == 0 {
+        return Err(unsafe { GetLastError() });
+    }
+
+    let size = unsafe { GetLengthSid(sid) };
+    let mut sid_buf: Vec<BYTE> = Vec::with_capacity(size as usize);
+
+    if unsafe {
+        CopySid(
+            size,
+            sid_buf.as_mut_ptr() as PSID,
+            sid) } == 0 {
+        return Err(unsafe { GetLastError() });
+    }
+
+    Ok(sid_buf)
+}
 
 fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
     let mut tkp = unsafe { mem::zeroed::<TOKEN_PRIVILEGES>() };
@@ -198,7 +224,6 @@ impl SecurityDescriptor {
         }
     }
 
-    // TODO(andy): We need a commit/apply function which bakes the security descriptor into
     pub fn apply(&mut self, path: &str, obj_type: SE_OBJECT_TYPE, dacl: Option<PACL>, sacl: Option<PACL>) -> bool {
         let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
         let dacl_ptr = dacl.unwrap_or(NULL as PACL);
