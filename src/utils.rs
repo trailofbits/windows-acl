@@ -40,10 +40,12 @@ use winapi::um::securitybaseapi::{
     AdjustTokenPrivileges, CopySid, GetLengthSid
 };
 use winapi::um::winbase::{
-    LocalFree, LookupPrivilegeValueW,
+    LocalFree, LookupPrivilegeValueW, LookupAccountNameW
 };
 use winapi::um::winnt::{
-    DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PACL, PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
+    DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PACL,
+    PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED,
+    TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY, SID_NAME_USE
 };
 
 pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
@@ -61,7 +63,61 @@ pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
     Ok(sid_string.to_string_lossy())
 }
 
-// TODO(andy): Implement function to look up SID from an username
+pub fn name_to_sid(name: &str, system: Option<&str>) -> Result<Vec<BYTE>, DWORD> {
+    let raw_name: Vec<u16> = OsStr::new(name)
+        .encode_wide()
+        .chain(once(0))
+        .collect();
+    let raw_system: Option<Vec<u16>> = system.map(
+        |name| OsStr::new(name).encode_wide().chain(once(0)).collect()
+    );
+    let system_ptr: LPCWSTR = match raw_system {
+        Some(sys_name) => sys_name.as_ptr(),
+        None => NULL as LPCWSTR
+    };
+    let mut sid_size: DWORD = 0;
+    let mut sid_type: SID_NAME_USE = 0 as SID_NAME_USE;
+
+    let mut name_size: DWORD = 0;
+
+    if unsafe {
+        LookupAccountNameW(
+            system_ptr,
+            raw_name.as_ptr() as LPCWSTR,
+            NULL as PSID,
+            &mut sid_size,
+            NULL as LPWSTR,
+            &mut name_size,
+            &mut sid_type
+        )
+    } != 0 {
+        return Err(unsafe { GetLastError() });
+    }
+
+    if sid_size == 0 {
+        return Err(0);
+    }
+
+    let mut sid: Vec<BYTE> = Vec::with_capacity(sid_size as usize);
+    let mut name: Vec<BYTE> = Vec::with_capacity(name_size as usize);
+
+    if unsafe {
+        LookupAccountNameW(
+            system_ptr,
+            raw_name.as_ptr() as LPCWSTR,
+            sid.as_mut_ptr() as PSID,
+            &mut sid_size,
+            name.as_mut_ptr() as LPWSTR,
+            &mut name_size,
+            &mut sid_type
+        )
+    } == 0 {
+        return Err(unsafe { GetLastError() });
+    }
+
+    Ok(sid)
+}
+
 pub fn string_to_sid(string_sid: &str) -> Result<Vec<BYTE>, DWORD> {
     let mut sid: PSID = NULL as PSID;
     let raw_string_sid: Vec<u16> = OsStr::new(string_sid)
