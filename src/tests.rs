@@ -33,15 +33,16 @@ fn run_ps_script(file_name: &str) -> bool {
 
 #[test]
 fn lookupname_unit_test() {
-    let raw_sid = match name_to_sid("Everyone", None) {
-        Ok(rs) => sid_to_string(rs.as_ptr() as PSID).unwrap_or("Unknown".to_string()),
-        Err(code) => {
-            println!("GLE={}", code);
-            return;
-        }
-    };
+    let world_name = "Everyone";
+    let world_string_sid = "S-1-1-0";
 
-    println!("raw_sid for {} => {}", "Everyone", raw_sid);
+    let raw_world_sid = name_to_sid(world_name, None).unwrap_or(Vec::new());
+    assert_ne!(raw_world_sid.capacity(), 0);
+
+    let sid_string = sid_to_string(raw_world_sid.as_ptr() as PSID).unwrap_or(String::from(""));
+    assert_ne!(sid_string.len(), 0);
+
+    assert_eq!(sid_string, world_string_sid);
 }
 
 #[test]
