@@ -1,3 +1,5 @@
+#![cfg(windows)]
+
 extern crate clap;
 extern crate winapi;
 extern crate windows_acl;
@@ -79,21 +81,23 @@ fn process_entry(acl: &ACL, ent: &ACLEntry) {
                     }
                     masks += "FileAllAccess";
                 } else {
-                    if (ent.mask & FILE_GENERIC_READ) == FILE_GENERIC_READ {
+                    // NOTE(andy): For files with ACLs set by PowerShell CmdLets, SYNCHRONIZE is usually not set?!
+
+                    if (ent.mask & FILE_GENERIC_READ) == (FILE_GENERIC_READ & !SYNCHRONIZE) {
                         if masks.len() > 0 {
                             masks += " |\n         ";
                         }
                         masks += "FileGenericRead";
                     }
 
-                    if (ent.mask & FILE_GENERIC_WRITE) == FILE_GENERIC_WRITE {
+                    if (ent.mask & FILE_GENERIC_WRITE) == (FILE_GENERIC_WRITE & !SYNCHRONIZE) {
                         if masks.len() > 0 {
                             masks += " |\n         ";
                         }
                         masks += "FileGenericWrite";
                     }
 
-                    if (ent.mask & FILE_GENERIC_EXECUTE) == FILE_GENERIC_EXECUTE {
+                    if (ent.mask & FILE_GENERIC_EXECUTE) == (FILE_GENERIC_EXECUTE & !SYNCHRONIZE) {
                         if masks.len() > 0 {
                             masks += " |\n         ";
                         }

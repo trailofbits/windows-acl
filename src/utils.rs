@@ -11,14 +11,13 @@ use winapi::shared::minwindef::{
     BYTE, DWORD, FALSE, HLOCAL, PDWORD
 };
 use winapi::shared::ntdef::{
-    LPCWSTR, LPWSTR, HANDLE, NULL,
+    LPCWSTR, LPWSTR, HANDLE, NULL, WCHAR
 };
 use winapi::shared::sddl::{
     ConvertSidToStringSidW, ConvertStringSidToSidW
 };
 use winapi::shared::winerror::{
-    ERROR_NOT_ALL_ASSIGNED,
-    ERROR_SUCCESS,
+    ERROR_NOT_ALL_ASSIGNED, ERROR_SUCCESS, ERROR_INSUFFICIENT_BUFFER
 };
 
 #[allow(unused_imports)]
@@ -40,7 +39,7 @@ use winapi::um::securitybaseapi::{
     AdjustTokenPrivileges, CopySid, GetLengthSid
 };
 use winapi::um::winbase::{
-    LocalFree, LookupPrivilegeValueW, LookupAccountNameW
+    LocalFree, LookupPrivilegeValueW, LookupAccountNameW, GetUserNameW
 };
 use winapi::um::winnt::{
     DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PACL,
@@ -94,12 +93,16 @@ pub fn name_to_sid(name: &str, system: Option<&str>) -> Result<Vec<BYTE>, DWORD>
         return Err(unsafe { GetLastError() });
     }
 
+    if unsafe { GetLastError() } != ERROR_INSUFFICIENT_BUFFER {
+        return Err(0);
+    }
+
     if sid_size == 0 {
         return Err(0);
     }
 
     let mut sid: Vec<BYTE> = Vec::with_capacity(sid_size as usize);
-    let mut name: Vec<BYTE> = Vec::with_capacity(name_size as usize);
+    let mut name: Vec<BYTE> = Vec::with_capacity((name_size as usize) * mem::size_of::<WCHAR>());
 
     if unsafe {
         LookupAccountNameW(
@@ -141,6 +144,29 @@ pub fn string_to_sid(string_sid: &str) -> Result<Vec<BYTE>, DWORD> {
     }
 
     Ok(sid_buf)
+}
+
+pub fn current_user() -> Option<String> {
+    let mut username_size: DWORD = 0 as DWORD;
+
+    if unsafe {
+        GetUserNameW(NULL as LPWSTR, &mut username_size)
+        } != 0 {
+        return None;
+    }
+
+    let mut username: Vec<u16> = Vec::with_capacity(username_size as usize);
+    if unsafe {
+        GetUserNameW(username.as_mut_ptr() as LPWSTR, &mut username_size)
+        } == 0 {
+        return None;
+    }
+
+    let name = unsafe {
+        WideString::from_ptr(username.as_ptr(), (username_size - 1) as usize)
+    };
+
+    Some(name.to_string_lossy())
 }
 
 fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {

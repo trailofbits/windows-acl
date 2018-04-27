@@ -5,7 +5,9 @@ use field_offset::*;
 
 use std::fmt;
 use std::mem;
-use utils::SecurityDescriptor;
+use utils::{
+    SecurityDescriptor, sid_to_string
+};
 use winapi::shared::minwindef::{
     BYTE, DWORD, LPVOID, WORD, FALSE,
 };
@@ -92,7 +94,7 @@ impl From<SE_OBJECT_TYPE> for ObjectType {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AceType {
     Unknown = 0,
     AccessAllow = 1,
@@ -119,6 +121,7 @@ pub struct ACLEntry {
     pub flags: BYTE,
     pub mask: ACCESS_MASK,
     pub sid: Option<Vec<u16>>,
+    pub string_sid: String
 }
 
 pub struct ACL {
@@ -188,6 +191,7 @@ macro_rules! process_entry {
                     $entry.entry_size = (mem::size_of::<$cls>() as DWORD) -
                                         (mem::size_of::<DWORD>() as DWORD) +
                                         unsafe { GetLengthSid(sid.as_ptr() as PSID) };
+                    $entry.string_sid = sid_to_string(sid.as_ptr() as PSID).unwrap_or("".to_string());
                     $entry.sid = Some(sid);
                     $entry.entry_type = $typ;
                     $entry.size = unsafe { (*$ptr).AceSize };
@@ -263,6 +267,7 @@ fn enumerate_acl_entries<T: EntryCallback>(pAcl: PACL, callback: &mut T) -> bool
             flags: 0,
             mask: 0,
             sid: None,
+            string_sid: String::from("")
         };
 
         match unsafe { (*hdr).AceType } {

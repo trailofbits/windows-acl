@@ -1,4 +1,4 @@
-#[cfg(windows)]
+#![cfg(windows)]
 
 extern crate field_offset;
 extern crate libc;
