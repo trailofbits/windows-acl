@@ -9,8 +9,12 @@ use std::process::Command;
 use utils::{
     name_to_sid, sid_to_string, string_to_sid, current_user
 };
+use winapi::shared::winerror::{
+    ERROR_NOT_ALL_ASSIGNED
+};
 use winapi::um::winnt::{
-    PSID, INHERITED_ACE, FILE_GENERIC_READ, FILE_GENERIC_EXECUTE, FILE_ALL_ACCESS, SYNCHRONIZE
+    PSID, FILE_GENERIC_READ, FILE_GENERIC_EXECUTE, FILE_GENERIC_WRITE, FILE_ALL_ACCESS, SYNCHRONIZE,
+    SUCCESSFUL_ACCESS_ACE_FLAG, FAILED_ACCESS_ACE_FLAG,
 };
 
 fn support_path() -> Option<PathBuf> {
@@ -111,19 +115,20 @@ fn query_dacl_unit_test() {
     let entries = acl.all().unwrap_or(Vec::new());
     assert_ne!(entries.len(), 0);
 
+    // TODO(andy): Make less assumptions about the ordering in the future...
     let deny_entry = &entries[0];
     let allow_entry = &entries[1];
 
     assert_eq!(deny_entry.entry_type, AceType::AccessDeny);
     assert_eq!(deny_entry.string_sid, guest_sid);
-    assert_eq!(deny_entry.flags & INHERITED_ACE, 0);
+    assert_eq!(deny_entry.flags, 0);
 
     // NOTE(andy): For ACL entries added by CmdLets on files, SYNCHRONIZE is not set
     assert_eq!(deny_entry.mask, (FILE_GENERIC_READ | FILE_GENERIC_EXECUTE) & !SYNCHRONIZE);
 
     assert_eq!(allow_entry.entry_type, AceType::AccessAllow);
     assert_eq!(allow_entry.string_sid, current_user_sid);
-    assert_eq!(allow_entry.flags & INHERITED_ACE, 0);
+    assert_eq!(allow_entry.flags, 0);
 
     // NOTE(andy): For ACL entries added by CmdLets on files, SYNCHRONIZE is not set
     assert_eq!(allow_entry.mask, FILE_ALL_ACCESS);
@@ -142,6 +147,33 @@ fn query_sacl_unit_test() {
     let path = path_obj.to_str().unwrap_or("");
     assert_ne!(path.len(), 0);
 
-    let acl_result = ACL::from_file_path(path, true);
-    println!("result = {:?}", acl_result);
+    let acl = match ACL::from_file_path(path, true) {
+        Ok(obj) => obj,
+        Err(code) => {
+            assert_eq!(code, ERROR_NOT_ALL_ASSIGNED);
+            println!("INFO: Terminating query_sacl_unit_test early because we are not Admin.");
+            return;
+        }
+    };
+
+    let entries = acl.all().unwrap_or(Vec::new());
+    assert_ne!(entries.len(), 0);
+
+    // TODO(andy): Make less assumptions about the placement of the audit entry
+    let last = &entries.len() - 1;
+    let audit_entry = &entries[last];
+
+    assert_eq!(audit_entry.entry_type, AceType::SystemAudit);
+    assert_eq!(audit_entry.string_sid, world_sid);
+    assert_eq!(audit_entry.flags, SUCCESSFUL_ACCESS_ACE_FLAG | FAILED_ACCESS_ACE_FLAG);
+    assert_eq!(audit_entry.mask, (FILE_GENERIC_READ | FILE_GENERIC_WRITE) & !SYNCHRONIZE)
 }
+
+// TODO(andy): Adding DACL access deny
+// TODO(andy): Adding DACL access allow
+// TODO(andy): Removing DACL access deny
+// TODO(andy): Removing DACL access allow
+// TODO(andy): Adding SACL mandatory label
+// TODO(andy): Adding SACL audit
+// TODO(andy): Removing SACL mandatory label
+// TODO(andy): Removing SACL audit

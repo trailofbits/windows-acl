@@ -208,7 +208,6 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
     unsafe { CloseHandle(hToken) };
 
     if code == ERROR_NOT_ALL_ASSIGNED {
-        println!("not all assigned");
         return Err(code);
     }
 
