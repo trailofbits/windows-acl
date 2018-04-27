@@ -37,7 +37,7 @@ use winapi::um::winnt::{
     INHERITED_ACE,
 };
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ObjectType {
     Unknown = 0,
     FileObject,
@@ -124,6 +124,7 @@ pub struct ACLEntry {
     pub string_sid: String
 }
 
+#[derive(Debug)]
 pub struct ACL {
     descriptor: Option<SecurityDescriptor>,
     path: String,

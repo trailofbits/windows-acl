@@ -219,6 +219,7 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
     Ok(is_enabled)
 }
 
+#[derive(Debug)]
 struct SystemPrivilege {
     name: Option<String>
 }
@@ -245,6 +246,7 @@ impl Drop for SystemPrivilege {
     }
 }
 
+#[derive(Debug)]
 pub struct SecurityDescriptor {
     pSecurityDescriptor: PSECURITY_DESCRIPTOR,
     pub pDacl: PACL,

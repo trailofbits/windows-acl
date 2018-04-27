@@ -91,8 +91,8 @@ fn sidstring_unit_test() {
 }
 
 #[test]
-fn query_unit_test() {
-    assert!(run_ps_script("setup_query_test.ps1"));
+fn query_dacl_unit_test() {
+    assert!(run_ps_script("setup_query_dacl_test.ps1"));
 
     let guest_sid = string_sid_by_user("Guest");
     let current_user_sid = current_user_string_sid();
@@ -127,4 +127,21 @@ fn query_unit_test() {
 
     // NOTE(andy): For ACL entries added by CmdLets on files, SYNCHRONIZE is not set
     assert_eq!(allow_entry.mask, FILE_ALL_ACCESS);
+}
+
+#[test]
+fn query_sacl_unit_test() {
+    assert!(run_ps_script("setup_query_sacl_test.ps1"));
+
+    let world_sid = string_sid_by_user("Everyone");
+
+    let mut path_obj = support_path().unwrap_or(PathBuf::new());
+    path_obj.push("query_test");
+    assert!(path_obj.exists());
+
+    let path = path_obj.to_str().unwrap_or("");
+    assert_ne!(path.len(), 0);
+
+    let acl_result = ACL::from_file_path(path, true);
+    println!("result = {:?}", acl_result);
 }
