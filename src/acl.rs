@@ -19,8 +19,8 @@ use winapi::um::accctrl::{
 };
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::securitybaseapi::{
-    AddAce, CopySid, EqualSid, GetAce, GetAclInformation, GetLengthSid, IsValidAcl, IsValidSid,
-    AddAccessAllowedAceEx, AddAccessDeniedAceEx, AddAuditAccessAceEx, AddMandatoryAce,
+    AddAce, CopySid, EqualSid, GetAce, GetAclInformation, GetLengthSid, InitializeAcl, IsValidAcl,
+    IsValidSid, AddAccessAllowedAceEx, AddAccessDeniedAceEx, AddAuditAccessAceEx, AddMandatoryAce,
 };
 use winapi::um::winnt::{
     ACCESS_ALLOWED_ACE, ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE,
@@ -32,7 +32,7 @@ use winapi::um::winnt::{
     SYSTEM_AUDIT_CALLBACK_ACE, SYSTEM_AUDIT_CALLBACK_ACE_TYPE, SYSTEM_AUDIT_CALLBACK_OBJECT_ACE,
     SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE, SYSTEM_AUDIT_OBJECT_ACE, SYSTEM_AUDIT_OBJECT_ACE_TYPE,
     SYSTEM_MANDATORY_LABEL_ACE, SYSTEM_MANDATORY_LABEL_ACE_TYPE, SYSTEM_RESOURCE_ATTRIBUTE_ACE,
-    SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE, MAXDWORD, ACL_REVISION, AclSizeInformation, ACL_SIZE_INFORMATION,
+    SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE, MAXDWORD, ACL_REVISION_DS, AclSizeInformation, ACL_SIZE_INFORMATION,
     CONTAINER_INHERIT_ACE, OBJECT_INHERIT_ACE, SUCCESSFUL_ACCESS_ACE_FLAG, FAILED_ACCESS_ACE_FLAG,
     INHERITED_ACE,
 };
@@ -130,6 +130,22 @@ pub struct ACL {
     path: String,
     include_sacl: bool,
     object_type: ObjectType,
+}
+
+#[allow(dead_code)]
+impl ACLEntry {
+    pub fn new() -> ACLEntry {
+        ACLEntry {
+            index: 0,
+            entry_type: AceType::Unknown,
+            entry_size: 0,
+            size: 0,
+            flags: 0,
+            mask: 0,
+            sid: None,
+            string_sid: "".to_string()
+        }
+    }
 }
 
 impl fmt::Display for ObjectType {
@@ -390,14 +406,20 @@ impl AddEntryCallback {
         new_acl_size += acl_entry_size(entry_type)? as usize;
         new_acl_size += unsafe { GetLengthSid(sid) as usize } - mem::size_of::<DWORD>();
 
-        Some(AddEntryCallback {
+        let mut obj = AddEntryCallback {
             new_acl: Vec::with_capacity(new_acl_size),
             entry_sid: sid,
             entry_type,
             entry_flags: flags,
             entry_mask: mask,
             already_added: false,
-        })
+        };
+
+        if unsafe { InitializeAcl(obj.new_acl.as_mut_ptr() as PACL, new_acl_size as DWORD, ACL_REVISION_DS as DWORD) } == 0 {
+            return None;
+        }
+
+        Some(obj)
     }
 
     fn insert_entry(&mut self) -> bool {
@@ -406,7 +428,7 @@ impl AddEntryCallback {
                 unsafe {
                     AddAccessAllowedAceEx(
                         self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION as DWORD,
+                        ACL_REVISION_DS as DWORD,
                         self.entry_flags as DWORD,
                         self.entry_mask,
                         self.entry_sid,
@@ -417,7 +439,7 @@ impl AddEntryCallback {
                 unsafe {
                     AddAccessDeniedAceEx(
                         self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION as DWORD,
+                        ACL_REVISION_DS as DWORD,
                         self.entry_flags as DWORD,
                         self.entry_mask,
                         self.entry_sid,
@@ -428,7 +450,7 @@ impl AddEntryCallback {
                 unsafe {
                     AddAuditAccessAceEx(
                         self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION as DWORD,
+                        ACL_REVISION_DS as DWORD,
                         self.entry_flags as DWORD,
                         self.entry_mask,
                         self.entry_sid,
@@ -441,7 +463,7 @@ impl AddEntryCallback {
                 unsafe {
                     AddMandatoryAce(
                         self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION as DWORD,
+                        ACL_REVISION_DS as DWORD,
                         self.entry_flags as DWORD,
                         self.entry_mask,
                         self.entry_sid,
@@ -504,7 +526,7 @@ impl EntryCallback for AddEntryCallback {
         if unsafe {
             AddAce(
                 self.new_acl.as_mut_ptr() as PACL,
-                ACL_REVISION as DWORD,
+                ACL_REVISION_DS as DWORD,
                 MAXDWORD,
                 hdr as LPVOID,
                 (*hdr).AceSize as DWORD,
@@ -521,13 +543,19 @@ impl RemoveEntryCallback {
     fn new(old_acl: PACL, target: PSID, target_type: Option<AceType>, flags: Option<BYTE>) -> Option<RemoveEntryCallback> {
         let new_acl_size = acl_size(old_acl)? as usize;
 
-        Some(RemoveEntryCallback {
+        let mut obj = RemoveEntryCallback {
             removed: 0,
             target,
             target_type,
             flags,
             new_acl: Vec::with_capacity(new_acl_size),
-        })
+        };
+
+        if unsafe { InitializeAcl(obj.new_acl.as_mut_ptr() as PACL, new_acl_size as DWORD, ACL_REVISION_DS as DWORD) } == 0 {
+            return None;
+        }
+
+        Some(obj)
     }
 }
 
@@ -567,7 +595,7 @@ impl EntryCallback for RemoveEntryCallback {
 
         if unsafe {
             AddAce(self.new_acl.as_mut_ptr() as PACL,
-                   ACL_REVISION as DWORD,
+                   ACL_REVISION_DS as DWORD,
                    MAXDWORD,
                    hdr as LPVOID,
                    (*hdr).AceSize as DWORD)
@@ -684,11 +712,13 @@ impl ACL {
             }
             add_callback.already_added = true;
 
+            let new_acl = add_callback.new_acl.as_ptr() as PACL;
+
             let status: bool;
             if is_dacl {
-                status = descriptor.apply(&self.path, object_type.into(), Some(acl), None);
+                status = descriptor.apply(&self.path, object_type.into(), Some(new_acl), None);
             } else {
-                status = descriptor.apply(&self.path, object_type.into(), None, Some(acl));
+                status = descriptor.apply(&self.path, object_type.into(), None, Some(new_acl));
             }
 
             if !status {
