@@ -42,8 +42,8 @@ use winapi::um::winbase::{
     LocalFree, LookupPrivilegeValueW, LookupAccountNameW, GetUserNameW
 };
 use winapi::um::winnt::{
-    DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PACL,
-    PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED,
+    DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, LABEL_SECURITY_INFORMATION,
+    PACL, PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED,
     TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY, SID_NAME_USE
 };
 
@@ -270,7 +270,7 @@ impl SecurityDescriptor {
                 Err(c) => return Err(c)
             };
 
-            flags |= SACL_SECURITY_INFORMATION;
+            flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
 
         let ret = unsafe {
@@ -318,7 +318,7 @@ impl SecurityDescriptor {
         }
 
         if sacl_ptr != (NULL as PACL) {
-            flags |= SACL_SECURITY_INFORMATION;
+            flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
 
         if unsafe {
@@ -332,10 +332,9 @@ impl SecurityDescriptor {
                 sacl_ptr,
             )
         } != 0 {
-            println!("SetNamedSecurityInfoW: GLE={}", unsafe { GetLastError() });
             return false;
         }
-        println!("SetNamedSecurityInfoW: SUCCESS");
+
         true
     }
 }

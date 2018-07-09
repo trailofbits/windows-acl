@@ -21,12 +21,18 @@ use winapi::um::winnt::{
 
 fn support_path() -> Option<PathBuf> {
     if let Ok(mut path) = current_exe() {
-         for _ in 0..4 {
-             path.pop();
-         }
-        path.push("support");
-        path.push("testfiles");
-        return Some(path);
+        for _ in 0..6 {
+            path.pop();
+
+            path.push("support");
+
+            if path.exists() {
+                path.push("testfiles");
+                return Some(path)
+            }
+
+            path.pop();
+        }
     } else {
         assert!(false, "current_exe failed");
     }
@@ -45,8 +51,14 @@ fn run_ps_script(file_name: &str) -> bool {
                 Ok(process) => process,
                 _ => { return false; }
             };
-            if let Ok(_code) = process.wait() {
-                return true;
+
+            match process.wait() {
+                Ok(_code) => {
+                    return true;
+                },
+                Err(_code) => {
+                    return false;
+                }
             }
         }
     }
