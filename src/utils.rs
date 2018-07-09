@@ -332,9 +332,10 @@ impl SecurityDescriptor {
                 sacl_ptr,
             )
         } != 0 {
+            println!("SetNamedSecurityInfoW: GLE={}", unsafe { GetLastError() });
             return false;
         }
-
+        println!("SetNamedSecurityInfoW: SUCCESS");
         true
     }
 }

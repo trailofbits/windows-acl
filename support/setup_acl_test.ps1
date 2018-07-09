@@ -72,7 +72,9 @@ $testDirs = @(
 
 $testFiles = @(
     "dacl_deny_file",
-    "dacl_allow_file"
+    "dacl_allow_file",
+    "sacl_audit_file",
+    "sacl_mil_file"
 )
 
 ForEach ($testDir in $testDirs) {
@@ -134,7 +136,7 @@ $acl | Set-Acl -Path $queryPath
 $queryPath = Join-Path -Path $supportPath -ChildPath "dacl_deny_file"
 ResetDaclEntries -Path $queryPath
 
-$userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read", "Allow"
+$userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read, Write", "Allow"
 
 $acl = Get-Acl -Path $queryPath
 $null = $acl.SetAccessRule($userRule)
@@ -144,7 +146,7 @@ $acl | Set-Acl -Path $queryPath
 $queryPath = Join-Path -Path $supportPath -ChildPath "dacl_allow_file"
 ResetDaclEntries -Path $queryPath
 
-$userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read, Write", "Allow"
+$userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read", "Allow"
 
 $acl = Get-Acl -Path $queryPath
 $null = $acl.SetAccessRule($userRule)

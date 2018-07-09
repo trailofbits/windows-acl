@@ -1,4 +1,8 @@
 # windows-acl
 
 ## Unit Tests
-The unit tests need to be run with Administrator privileges. Our unit tests require SeSecurityPrivilege to disable parent inheritance and to set System Access Control Lists. Need to set `RUST_TEST_THREADS=1`
+Running unit tests requires a specific procedure because the default unit test procedure creates race conditions.
+
+ 1. Open an elevated privilege/Administrator Command Prompt or Powershell Terminal.
+ 2. Set the `RUST_TEST_THREADS` environment variable to 1.
+ 3. Run `cargo test`

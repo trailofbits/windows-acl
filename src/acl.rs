@@ -738,39 +738,38 @@ impl ACL {
         let object_type = self.object_type().into();
 
         if let Some(ref mut descriptor) = self.descriptor {
-            let mut dacl_callback = match RemoveEntryCallback::new(descriptor.pDacl, sid, entry_type, flags) {
-                Some(obj) => obj,
-                None => return Err(unsafe { GetLastError() })
+            let mut dacl_result: Option<RemoveEntryCallback> = if descriptor.pDacl != (NULL as PACL) {
+                RemoveEntryCallback::new(descriptor.pDacl, sid, entry_type, flags)
+            } else {
+                None
             };
 
-            if descriptor.pDacl != (NULL as PACL) && !enumerate_acl_entries(descriptor.pDacl, &mut dacl_callback) {
-                return Err(unsafe { GetLastError() });
-            }
-            removed_entries = dacl_callback.removed;
+            if let Some(mut dacl_callback) = dacl_result {
+                if !enumerate_acl_entries(descriptor.pDacl, &mut dacl_callback) {
+                    return Err(unsafe { GetLastError() });
+                }
+                removed_entries += dacl_callback.removed;
 
-            let mut sacl_callback = match RemoveEntryCallback::new(descriptor.pSacl, sid, entry_type, flags) {
-                Some(obj) => obj,
-                None => return Err(unsafe { GetLastError() })
+                if !descriptor.apply(&self.path, object_type, Some(dacl_callback.new_acl.as_ptr() as PACL), None) {
+                    return Err(unsafe { GetLastError() });
+                }
+            }
+
+            let mut sacl_result: Option<RemoveEntryCallback> = if descriptor.pSacl != (NULL as PACL) {
+                RemoveEntryCallback::new(descriptor.pSacl, sid, entry_type, flags)
+            } else {
+                None
             };
 
-            if descriptor.pSacl != (NULL as PACL) && !enumerate_acl_entries(descriptor.pSacl, &mut sacl_callback) {
-                return Err(unsafe { GetLastError() });
-            }
-            removed_entries += sacl_callback.removed;
+            if let Some(mut sacl_callback) = sacl_result {
+                if !enumerate_acl_entries(descriptor.pSacl, &mut sacl_callback) {
+                    return Err(unsafe { GetLastError() });
+                }
+                removed_entries += sacl_callback.removed;
 
-            let mut dacl: Option<PACL> = None;
-            let mut sacl: Option<PACL> = None;
-
-            if descriptor.pDacl != (NULL as PACL) {
-                dacl = Some(dacl_callback.new_acl.as_mut_ptr() as PACL);
-            }
-
-            if descriptor.pSacl != (NULL as PACL) {
-                sacl = Some(sacl_callback.new_acl.as_mut_ptr() as PACL);
-            }
-
-            if !descriptor.apply(&self.path, object_type, dacl, sacl) {
-                return Err(unsafe { GetLastError() });
+                if !descriptor.apply(&self.path, object_type, None, Some(sacl_callback.new_acl.as_ptr() as PACL)) {
+                    return Err(unsafe { GetLastError() });
+                }
             }
         }
 
@@ -781,7 +780,7 @@ impl ACL {
         Ok(removed_entries)
     }
 
-    // NOTE(andy): Simple API
+    // NOTE(andy): These are simple APIs that simplifies adding access allow and access deny entries
     pub fn allow(&mut self, sid: PSID, inheritable: bool, mask: DWORD) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
