@@ -28,7 +28,9 @@ use winapi::um::accctrl::{
 use winapi::um::aclapi::{
     GetNamedSecurityInfoW, SetNamedSecurityInfoW,
 };
-use winapi::um::errhandlingapi::GetLastError;
+use winapi::um::errhandlingapi::{
+    GetLastError, SetLastError
+};
 use winapi::um::handleapi::{
     CloseHandle, INVALID_HANDLE_VALUE,
 };
@@ -252,7 +254,6 @@ pub struct SecurityDescriptor {
     pub pSacl: PACL,
     psidOwner: PSID,
     psidGroup: PSID,
-    privilege: Option<SystemPrivilege>,
 }
 
 impl SecurityDescriptor {
@@ -264,11 +265,13 @@ impl SecurityDescriptor {
         let mut flags = DACL_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
             OWNER_SECURITY_INFORMATION;
 
+        let privilege: Option<SystemPrivilege>;
+
         if get_sacl {
-            obj.privilege = match SystemPrivilege::acquire("SeSecurityPrivilege") {
-                Ok(p) => Some(p),
-                Err(c) => return Err(c)
-            };
+            privilege = SystemPrivilege::acquire("SeSecurityPrivilege").ok();
+            if privilege.is_none() {
+                return Err(unsafe { GetLastError() });
+            }
 
             flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
@@ -286,6 +289,7 @@ impl SecurityDescriptor {
             )
         };
         if ret != ERROR_SUCCESS {
+            unsafe { SetLastError(ret) };
             return Err(ret);
         }
 
@@ -303,7 +307,6 @@ impl SecurityDescriptor {
             pSacl: NULL as PACL,
             psidOwner: NULL,
             psidGroup: NULL,
-            privilege: None,
         }
     }
 
@@ -317,11 +320,18 @@ impl SecurityDescriptor {
             flags |= DACL_SECURITY_INFORMATION;
         }
 
+        let privilege: Option<SystemPrivilege>;
+
         if sacl_ptr != (NULL as PACL) {
+            privilege = SystemPrivilege::acquire("SeSecurityPrivilege").ok();
+            if privilege.is_none() {
+                return false;
+            }
+
             flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
 
-        if unsafe {
+        let ret = unsafe {
             SetNamedSecurityInfoW(
                 wPath.as_mut_ptr(),
                 obj_type,
@@ -330,8 +340,9 @@ impl SecurityDescriptor {
                 NULL as PSID,
                 dacl_ptr,
                 sacl_ptr,
-            )
-        } != 0 {
+            ) };
+        if ret != ERROR_SUCCESS {
+            unsafe { SetLastError(ret) };
             return false;
         }
 

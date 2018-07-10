@@ -258,7 +258,7 @@ fn add_and_remove_dacl_allow_test() {
         Ok(x) => assert!(x),
         Err(x) => {
             println!("ACL.allow failed for adding allow ACE for {} to FILE_GENERIC_READ: GLE={}", &current_user, x);
-            assert_eq!(x, 0);
+            assert!(false);
             return;
         }
     }
@@ -288,7 +288,7 @@ fn add_and_remove_dacl_allow_test() {
         Ok(x) => assert_eq!(x, 1),
         Err(x) => {
             println!("ACL.remove failed for removing allow ACE for {} to FILE_GENERIC_READ: GLE={}", &current_user, x);
-            assert_eq!(x, 0);
+            assert!(false);
             return;
         }
     }
@@ -341,7 +341,7 @@ fn add_and_remove_dacl_deny_test() {
         Ok(x) => assert!(x),
         Err(x) => {
             println!("ACL.deny failed for adding allow ACE for {} to FILE_GENERIC_READ: GLE={}", current_user, x);
-            assert_eq!(x, 0);
+            assert!(false);
             return;
         }
     }
@@ -370,8 +370,8 @@ fn add_and_remove_dacl_deny_test() {
     match acl.remove(current_user_sid.as_ptr() as PSID, Some(AceType::AccessDeny), Some(false)) {
         Ok(x) => assert_eq!(x, 1),
         Err(x) => {
-            println!("ACL.remove failed for removing allow ACE for {} to FILE_GENERIC_READ: GLE={}", current_user, x);
-            assert_ne!(x, 0);
+            println!("ACL.remove failed for removing deny ACE for {} to FILE_GENERIC_READ: GLE={}", current_user, x);
+            assert!(false);
             return;
         }
     }
@@ -391,7 +391,6 @@ fn add_and_remove_dacl_deny_test() {
     }
 }
 
-// TODO(andy): Adding, removing SACL mandatory label
 #[test]
 fn add_remove_sacl_mil() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -421,13 +420,39 @@ fn add_remove_sacl_mil() {
         Ok(x) => assert!(x),
         Err(x) => {
             println!("ACL.integrity_level failed for {}: GLE={}", &low_mil_string_sid, x);
-            assert_eq!(x, 0);
+            assert!(false);
             return;
         }
     }
+
+    let mut entries = acl.all().unwrap_or(Vec::new());
+    assert_ne!(entries.len(), 0);
+
+    let mut expected = ACLEntry::new();
+    expected.entry_type = AceType::SystemMandatoryLabel;
+    expected.string_sid = low_mil_string_sid.to_string();
+    expected.flags = 0;
+    expected.mask = SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP | SYSTEM_MANDATORY_LABEL_NO_READ_UP | SYSTEM_MANDATORY_LABEL_NO_WRITE_UP;
+
+    assert!(acl_entry_exists(&entries, &expected).is_some());
+
+    // TODO(andy): Remove integrity level
+    match acl.remove(low_mil_sid.as_ptr() as PSID, Some(AceType::SystemMandatoryLabel), Some(false)) {
+        Ok(x) => assert_eq!(x, 1),
+        Err(x) => {
+            println!("ACL.remove failed for removing mandatory ACE for {}: GLE={}", low_mil_string_sid, x);
+            assert!(false);
+            return;
+        }
+    }
+
+    // TODO(andy): Make sure it is actually removed
+    entries = acl.all().unwrap_or(Vec::new());
+    assert_ne!(entries.len(), 0);
+
+    assert!(acl_entry_exists(&entries, &expected).is_none());
 }
 
-// TODO(andy): Adding, removing SACL audit
 #[test]
 fn add_remove_sacl_audit() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -436,6 +461,16 @@ fn add_remove_sacl_audit() {
     path_obj.push("sacl_audit_file");
     assert!(path_obj.exists());
 
+    let current_user = current_user_string_sid();
+    let current_user_sid = match string_to_sid(&current_user) {
+        Ok(x) => x,
+        Err(x) => {
+            println!("string_to_sid failed for {}: GLE={}", current_user, x);
+            assert_eq!(x, 0);
+            return;
+        }
+    };
+
     let path = path_obj.to_str().unwrap_or("");
     assert_ne!(path.len(), 0);
 
@@ -443,4 +478,37 @@ fn add_remove_sacl_audit() {
     assert!(acl_result.is_ok());
 
     let mut acl = acl_result.unwrap();
+    match acl.audit(current_user_sid.as_ptr() as PSID, false, FILE_GENERIC_READ, true, true) {
+        Ok(x) => assert!(x),
+        Err(x) => {
+            println!("ACL.audit failed for {}: GLE={}", &current_user, x);
+            assert!(false);
+            return;
+        }
+    }
+
+    let mut entries = acl.all().unwrap_or(Vec::new());
+    assert_ne!(entries.len(), 0);
+
+    let mut expected = ACLEntry::new();
+    expected.entry_type = AceType::SystemAudit;
+    expected.string_sid = current_user.to_string();
+    expected.flags = SUCCESSFUL_ACCESS_ACE_FLAG | FAILED_ACCESS_ACE_FLAG;
+    expected.mask = FILE_GENERIC_READ;
+
+    assert!(acl_entry_exists(&entries, &expected).is_some());
+
+    match acl.remove(current_user_sid.as_ptr() as PSID, Some(AceType::SystemAudit), Some(false)) {
+        Ok(x) => assert_eq!(x, 1),
+        Err(x) => {
+            println!("ACL.remove failed for removing mandatory ACE for {}: GLE={}", &current_user, x);
+            assert!(false);
+            return;
+        }
+    }
+
+    entries = acl.all().unwrap_or(Vec::new());
+    assert_ne!(entries.len(), 0);
+
+    assert!(acl_entry_exists(&entries, &expected).is_none());
 }
