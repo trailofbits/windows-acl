@@ -1,0 +1,13 @@
+[package]
+name = "query-acl"
+version = "0.1.0"
+authors = ["yying"]
+
+[[bin]]
+name = "query_acl"
+path = "query_acl.rs"
+
+[dependencies]
+clap = "~2.32.0"
+winapi = "~0.3.5"
+windows-acl = { path = "../../windows-acl" }
