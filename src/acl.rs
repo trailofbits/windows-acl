@@ -777,7 +777,8 @@ impl ACL {
     /// * `mask` - The permissions allotted for the target entity.
     ///
     /// # Remarks
-    /// We only support (for now) adding access allow, access deny, system audit, and system mandatory label entries.
+    /// We only support (for now) adding access allow, access deny, system audit, and system mandatory label entries. After adding the entry,
+    /// the security descriptor is automatically reloaded to reflect changes.
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
@@ -836,6 +837,9 @@ impl ACL {
     /// * `sid` - The target entry's raw SID.
     /// * `entry_type` - The entry's type.
     /// * `flags` - See [ACE_HEADER](https://docs.microsoft.com/en-us/windows/desktop/api/winnt/ns-winnt-_ace_header) documentation.
+    ///
+    /// # Remarks
+    /// After removing the entry, the security descriptor is reloaded automatically to reflect changes.
     ///
     /// # Errors
     /// On error, a Windows error code wrapped in a `Err` type.

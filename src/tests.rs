@@ -126,6 +126,7 @@ fn acl_entry_exists(entries: &Vec<ACLEntry>, expected: &ACLEntry) -> Option<usiz
     None
 }
 
+// Make sure we can read DACL entries set by an external tool (PowerShell)
 #[test]
 fn query_dacl_unit_test() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -181,6 +182,7 @@ fn query_dacl_unit_test() {
     assert!(deny_idx < allow_idx);
 }
 
+// Make sure we can read SACL entries set by external tools (PowerShell/.NET)
 #[test]
 fn query_sacl_unit_test() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -224,6 +226,7 @@ fn query_sacl_unit_test() {
     assert!(allow_idx > 0);
 }
 
+// Ensure that we can add and remove DACL access allow entries
 #[test]
 fn add_and_remove_dacl_allow_test() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -308,6 +311,7 @@ fn add_and_remove_dacl_allow_test() {
     }
 }
 
+// Ensure we can add and remove DACL access deny entries
 #[test]
 fn add_and_remove_dacl_deny_test() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -392,6 +396,7 @@ fn add_and_remove_dacl_deny_test() {
     }
 }
 
+// Ensure we can add and remove a SACL mandatory level entry
 #[test]
 fn add_remove_sacl_mil() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -454,6 +459,7 @@ fn add_remove_sacl_mil() {
     assert!(acl_entry_exists(&entries, &expected).is_none());
 }
 
+// Make sure we can add and remove a SACL audit entry
 #[test]
 fn add_remove_sacl_audit() {
     assert!(run_ps_script("setup_acl_test.ps1"));
@@ -515,6 +521,10 @@ fn add_remove_sacl_audit() {
 }
 
 
-// TODO(andy): Test ACL.get with multiple options
+// TODO(andy): Test ACL.get by having two entries with the same fields except type (allow vs deny) and have get only retrieve the deny ACL entry
+#[test]
+fn acl_get_test() {}
 
-// TODO(andy): Test ACL.remove_entry with multiple options as None
+// TODO(andy): Test ACL.remove_entry by having two entries with the same entries except different type (allow vs deny) and different flags (inherit vs no-inherit)
+#[test]
+fn acl_remove_entry_test() {}
