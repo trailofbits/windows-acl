@@ -1,3 +1,5 @@
+//! Contains the ACL introspection and manipulation functionality
+
 #![allow(non_snake_case)]
 
 #[allow(unused_imports)]
@@ -37,6 +39,8 @@ use winapi::um::winnt::{
     INHERITED_ACE,
 };
 
+/// This enum is almost a direct mapping with the values described in
+/// [SE_OBJECT_TYPE](https://docs.microsoft.com/en-us/windows/desktop/api/accctrl/ne-accctrl-_se_object_type)
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ObjectType {
     Unknown = 0,
@@ -94,6 +98,8 @@ impl From<SE_OBJECT_TYPE> for ObjectType {
     }
 }
 
+/// This enum is a almost direct mapping with the values described under `AceType` in
+/// [ACE_HEADER](https://docs.microsoft.com/en-us/windows/desktop/api/winnt/ns-winnt-_ace_header)
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum AceType {
     Unknown = 0,
@@ -113,17 +119,34 @@ pub enum AceType {
     SystemResourceAttribute,
 }
 
+/// `ACLEntry` represents a single access control entry in an access control list
 pub struct ACLEntry {
+    /// The index of the current entry in the raw access control list
     pub index: u16,
+
+    /// The entry's type
     pub entry_type: AceType,
+
+    /// The calculated size of the current access control entry
     pub entry_size: DWORD,
+
+    /// See `AceSize` in [ACE_HEADER](https://docs.microsoft.com/en-us/windows/desktop/api/winnt/ns-winnt-_ace_header)
     pub size: WORD,
+
+    /// See `AceFlags` in [ACE_HEADER](https://docs.microsoft.com/en-us/windows/desktop/api/winnt/ns-winnt-_ace_header)
     pub flags: BYTE,
+
+    /// See [ACCESS_MASK](https://docs.microsoft.com/en-us/windows/desktop/secauthz/access-mask)
     pub mask: ACCESS_MASK,
+
+    /// The target entity's raw SID
     pub sid: Option<Vec<u16>>,
+
+    /// The target entity's SID in string representation
     pub string_sid: String
 }
 
+/// `ACL` represents the access control list (discretionary or oth discretionary/system) for a named object
 #[derive(Debug)]
 pub struct ACL {
     descriptor: Option<SecurityDescriptor>,
@@ -613,7 +636,7 @@ impl ACL {
     ///
     /// # Arguments
     /// * `path` - A string containing the named object path.
-    /// * `object_type` - The named object path's type. See `SE_OBJECT_TYPE`.
+    /// * `object_type` - The named object path's type. See [SE_OBJECT_TYPE](https://docs.microsoft.com/en-us/windows/desktop/api/accctrl/ne-accctrl-_se_object_type).
     /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
     ///                System ACL entries.
     ///

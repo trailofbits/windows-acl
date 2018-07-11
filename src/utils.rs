@@ -1,3 +1,5 @@
+//! Contains utility functions for converting between raw SID and SID string representations.
+
 #![allow(non_snake_case)]
 
 use libc;
@@ -274,7 +276,7 @@ impl Drop for SystemPrivilege {
     }
 }
 
-/// Test
+/// This structure manages a Windows `SECURITY_DESCRIPTOR` object.
 #[derive(Debug)]
 pub struct SecurityDescriptor {
     pSecurityDescriptor: PSECURITY_DESCRIPTOR,
@@ -290,15 +292,16 @@ pub struct SecurityDescriptor {
 }
 
 impl SecurityDescriptor {
-    ///
+    /// Returns a `SecurityDescriptor` object for the specified named object path.
     ///
     /// # Arguments
-    /// * `path` -
-    /// * `obj_type` -
-    /// * `get_sacl` -
+    /// * `path` - A string containing the named object path.
+    /// * `obj_type` - The named object path's type. See [SE_OBJECT_TYPE](https://docs.microsoft.com/en-us/windows/desktop/api/accctrl/ne-accctrl-_se_object_type).
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
     ///
     /// # Errors
-    ///
+    /// On error, a Windows error code is wrapped in an `Err` type
     pub fn from_path(path: &str, obj_type: SE_OBJECT_TYPE, get_sacl: bool)
                      -> Result<SecurityDescriptor, DWORD> {
         let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
@@ -352,16 +355,20 @@ impl SecurityDescriptor {
         }
     }
 
-    ///
+    /// Commits a provided discretionary and/or system access control list to the specified named object path.
     ///
     /// # Arguments
-    /// * `path` -
-    /// * `obj_type` -
-    /// * `dacl` -
-    /// * `sacl` -
+    /// * `path` - A string containing the named object path.
+    /// * `obj_type` - The named object path's type. See [SE_OBJECT_TYPE](https://docs.microsoft.com/en-us/windows/desktop/api/accctrl/ne-accctrl-_se_object_type).
+    /// * `dacl` - An optional
+    /// * `sacl` - An optional
+    ///
+    /// # Remarks
+    /// This function does not update the `pSacl` or `pDacl` field in the `SecurityDescriptor` object. The `ACL` object tends
+    /// to completely reload the `SecurityDescriptor` object after a reload to ensure consistency.
     ///
     /// # Errors
-    ///
+    /// On error, `false` is returned.
     pub fn apply(&mut self, path: &str, obj_type: SE_OBJECT_TYPE, dacl: Option<PACL>, sacl: Option<PACL>) -> bool {
         let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
         let dacl_ptr = dacl.unwrap_or(NULL as PACL);
