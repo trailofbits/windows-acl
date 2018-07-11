@@ -39,6 +39,7 @@ fn support_path() -> Option<PathBuf> {
 
     None
 }
+
 fn run_ps_script(file_name: &str) -> bool {
     if let Some(mut path) = support_path() {
         path.pop();
@@ -512,3 +513,8 @@ fn add_remove_sacl_audit() {
 
     assert!(acl_entry_exists(&entries, &expected).is_none());
 }
+
+
+// TODO(andy): Test ACL.get with multiple options
+
+// TODO(andy): Test ACL.remove_entry with multiple options as None

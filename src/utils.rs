@@ -49,6 +49,13 @@ use winapi::um::winnt::{
     TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY, SID_NAME_USE
 };
 
+/// Converts a raw SID into a SID string representation.
+///
+/// # Arguments
+/// * `sid` - A pointer to a raw SID buffer. In native Windows, this is would be a `PSID` type.
+///
+/// # Errors
+/// On error, a Windows error code is returned with the `Err` type.
 pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
     let mut raw_string_sid: LPWSTR = NULL as LPWSTR;
     if unsafe { ConvertSidToStringSidW(sid, &mut raw_string_sid) } == 0 ||
@@ -64,6 +71,18 @@ pub fn sid_to_string(sid: PSID) -> Result<String, DWORD> {
     Ok(sid_string.to_string_lossy())
 }
 
+/// Resolves a system username (either in the format of "user" or "DOMAIN\user") into a raw SID. The raw SID
+/// is represented by a `Vec<u8>` object.
+///
+/// # Arguments
+/// * `name` - The user name to be resolved into a raw SID.
+/// * `system` - An optional string denoting the scope of the user name (such as a machine or domain name). If not required, use `None`.
+///
+/// # Errors
+/// On error, a Windows error code is returned with the `Err` type.
+///
+/// **Note**: If the error code is 0, `GetLastError()` returned `ERROR_INSUFFICIENT_BUFFER` after invoking `LookupAccountNameW` or
+///         the `sid_size` is 0.
 pub fn name_to_sid(name: &str, system: Option<&str>) -> Result<Vec<BYTE>, DWORD> {
     let raw_name: Vec<u16> = OsStr::new(name)
         .encode_wide()
@@ -123,6 +142,13 @@ pub fn name_to_sid(name: &str, system: Option<&str>) -> Result<Vec<BYTE>, DWORD>
     Ok(sid)
 }
 
+/// Converts a string representation of a SID into a raw SID. The returned raw SID is contained in a `Vec<u8>` object.
+///
+/// # Arguments
+/// * `string_sid` - The SID to converted into raw form as a string.
+///
+/// # Errors
+/// On error, a Windows error code is wrapped in an `Err` type.
 pub fn string_to_sid(string_sid: &str) -> Result<Vec<BYTE>, DWORD> {
     let mut sid: PSID = NULL as PSID;
     let raw_string_sid: Vec<u16> = OsStr::new(string_sid)
@@ -148,6 +174,7 @@ pub fn string_to_sid(string_sid: &str) -> Result<Vec<BYTE>, DWORD> {
     Ok(sid_buf)
 }
 
+/// Retrieves the user name of the current user.
 pub fn current_user() -> Option<String> {
     let mut username_size: DWORD = 0 as DWORD;
 
@@ -247,16 +274,31 @@ impl Drop for SystemPrivilege {
     }
 }
 
+/// Test
 #[derive(Debug)]
 pub struct SecurityDescriptor {
     pSecurityDescriptor: PSECURITY_DESCRIPTOR,
+
+    /// Pointer to the discretionary access control list in the security descriptor
     pub pDacl: PACL,
+
+    /// Pointer to the system access control list in the security descriptor
     pub pSacl: PACL,
+
     psidOwner: PSID,
     psidGroup: PSID,
 }
 
 impl SecurityDescriptor {
+    ///
+    ///
+    /// # Arguments
+    /// * `path` -
+    /// * `obj_type` -
+    /// * `get_sacl` -
+    ///
+    /// # Errors
+    ///
     pub fn from_path(path: &str, obj_type: SE_OBJECT_TYPE, get_sacl: bool)
                      -> Result<SecurityDescriptor, DWORD> {
         let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
@@ -310,6 +352,16 @@ impl SecurityDescriptor {
         }
     }
 
+    ///
+    ///
+    /// # Arguments
+    /// * `path` -
+    /// * `obj_type` -
+    /// * `dacl` -
+    /// * `sacl` -
+    ///
+    /// # Errors
+    ///
     pub fn apply(&mut self, path: &str, obj_type: SE_OBJECT_TYPE, dacl: Option<PACL>, sacl: Option<PACL>) -> bool {
         let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
         let dacl_ptr = dacl.unwrap_or(NULL as PACL);

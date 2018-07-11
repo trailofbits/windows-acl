@@ -134,6 +134,7 @@ pub struct ACL {
 
 #[allow(dead_code)]
 impl ACLEntry {
+    /// Returns an `ACLEntry` object with default values.
     pub fn new() -> ACLEntry {
         ACLEntry {
             index: 0,
@@ -607,8 +608,21 @@ impl EntryCallback for RemoveEntryCallback {
     }
 }
 
-
 impl ACL {
+    /// Creates an `ACL` object from a specified named object path.
+    ///
+    /// # Arguments
+    /// * `path` - A string containing the named object path.
+    /// * `object_type` - The named object path's type. See `SE_OBJECT_TYPE`.
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// For file, kernel object, and registry paths, it is better to use the simpler `from_file_path`,
+    /// `from_object_path`, and `from_registry_path` APIs.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
     pub fn from_path(path: &str, object_type: SE_OBJECT_TYPE, get_sacl: bool) -> Result<ACL, DWORD> {
         Ok(ACL {
             descriptor: match SecurityDescriptor::from_path(path, object_type, get_sacl) {
@@ -621,15 +635,50 @@ impl ACL {
         })
     }
 
-    // TODO(andy): Simple constructor APIs
+    /// Creates an `ACL` object from a specified file path.
+    ///
+    /// # Arguments
+    /// * `path` - A string containing the file path.
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// This function is a wrapper for `from_path`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
     pub fn from_file_path(path: &str, get_sacl: bool) -> Result<ACL, DWORD> {
         ACL::from_path(path, SE_FILE_OBJECT, get_sacl)
     }
 
+    /// Creates an `ACL` object from a specified kernel object path.
+    ///
+    /// # Arguments
+    /// * `path` - A string containing the kernel object path.
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// This function is a wrapper for `from_path`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
     pub fn from_object_path(path: &str, get_sacl: bool) -> Result<ACL, DWORD> {
         ACL::from_path(path, SE_KERNEL_OBJECT, get_sacl)
     }
 
+    /// Creates an `ACL` object from a specified registry path.
+    ///
+    /// # Arguments
+    /// * `path` - A string containing the registry path.
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// This function is a wrapper for `from_path`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
     pub fn from_registry_path(path: &str, is_wow6432key: bool, get_sacl: bool) -> Result<ACL, DWORD> {
         if is_wow6432key {
             ACL::from_path(path, SE_REGISTRY_WOW64_32KEY, get_sacl)
@@ -638,10 +687,12 @@ impl ACL {
         }
     }
 
+    /// Returns the `ObjectType` of the target named object path as specified during the creation of the `ACL` object
     pub fn object_type(&self) -> ObjectType {
         self.object_type
     }
 
+    /// Returns a `Vec<ACLEntry>` of access control list entries for the specified named object path.
     pub fn all(&self) -> Result<Vec<ACLEntry>, DWORD> {
         let mut callback = AllEntryCallback {
             entries: Vec::new()
@@ -658,6 +709,14 @@ impl ACL {
         Ok(callback.entries)
     }
 
+    /// Retrieves a list of access control entries matching the target SID entity and optionally, a access control entry type.
+    ///
+    /// # Arguments
+    /// * `sid` - The raw SID of the target entity.
+    /// * `entry_type` - The access control entry type or `None`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
     pub fn get(&self, sid: PSID, entry_type: Option<AceType>) -> Result<Vec<ACLEntry>, DWORD> {
         let mut callback = GetEntryCallback {
             target: sid,
@@ -676,14 +735,29 @@ impl ACL {
         Ok(callback.entries)
     }
 
-    // TODO(andy): For initial version, we do not support object, conditional ACEs
-
+    /// Update the current named object path's security descriptor. Returns a boolean denoting the status of the reload operation.
+    ///
+    /// # Remarks
+    /// This is invoked automatically after any add/remove entry operation.
     pub fn reload(&mut self) -> bool {
         self.descriptor = SecurityDescriptor::from_path(&self.path, self.object_type().into(), self.include_sacl).ok();
 
         self.descriptor.is_some()
     }
 
+    /// Adds a custom entry into the access control list.
+    ///
+    /// # Arguments
+    /// * `sid` - The target entity's raw SID.
+    /// * `entry_type` - The entry's type. Currently, only `AccessAllow`, `AccessDeny`, `SystemAudit`, and `SystemMandatoryLabel` are supported.
+    /// * `flags` - See [ACE_HEADER](https://docs.microsoft.com/en-us/windows/desktop/api/winnt/ns-winnt-_ace_header) documentation.
+    /// * `mask` - The permissions allotted for the target entity.
+    ///
+    /// # Remarks
+    /// We only support (for now) adding access allow, access deny, system audit, and system mandatory label entries.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
     pub fn add_entry(&mut self, sid: PSID, entry_type: AceType, flags: BYTE, mask: DWORD) -> Result<bool, DWORD> {
         let object_type = self.object_type();
         if let Some(ref mut descriptor) = self.descriptor {
@@ -733,6 +807,15 @@ impl ACL {
         Ok(true)
     }
 
+    /// Removes access control list entries that match the specified parameters.
+    ///
+    /// # Arguments
+    /// * `sid` - The target entry's raw SID.
+    /// * `entry_type` - The entry's type.
+    /// * `flags` - See [ACE_HEADER](https://docs.microsoft.com/en-us/windows/desktop/api/winnt/ns-winnt-_ace_header) documentation.
+    ///
+    /// # Errors
+    /// On error, a Windows error code wrapped in a `Err` type.
     pub fn remove_entry(&mut self, sid: PSID, entry_type: Option<AceType>, flags: Option<BYTE>) -> Result<usize, DWORD> {
         let mut removed_entries = 0;
         let object_type = self.object_type().into();
@@ -780,7 +863,18 @@ impl ACL {
         Ok(removed_entries)
     }
 
-    // NOTE(andy): These are simple APIs that simplifies adding access allow and access deny entries
+    /// Adds an access allow entry to the access control list.
+    ///
+    /// # Arguments
+    /// * `sid` - The target entity's raw SID.
+    /// * `inheritable` - Denotes whether this entry should be inheritable by child objects.
+    /// * `mask` - The allowed permissions for the target entity.
+    ///
+    /// # Remarks
+    /// This is a wrapper over `add_entry`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
     pub fn allow(&mut self, sid: PSID, inheritable: bool, mask: DWORD) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
@@ -790,6 +884,18 @@ impl ACL {
         self.add_entry(sid, AceType::AccessAllow, flags, mask)
     }
 
+    /// Adds an access deny entry to the access control list.
+    ///
+    /// # Arguments
+    /// * `sid` - The target entity's raw SID.
+    /// * `inheritable` - Denotes whether this entry should be inheritable by child objects.
+    /// * `mask` - The denied permissions for the target entity.
+    ///
+    /// # Remarks
+    /// This is a wrapper over `add_entry`
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
     pub fn deny(&mut self, sid: PSID, inheritable: bool, mask: DWORD) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
@@ -799,6 +905,20 @@ impl ACL {
         self.add_entry(sid, AceType::AccessDeny, flags, mask)
     }
 
+    /// Adds a system audit entry to the access control list.
+    ///
+    /// # Arguments
+    /// * `sid` - The target entity's raw SID.
+    /// * `inheritable` - Denotes whether this entry should be inheritable by child objects.
+    /// * `mask` - The permissions to audit.
+    /// * `audit_success` - Denotes that success events should be audited.
+    /// * `audit_fails` - Denotes that failure events should be audited.
+    ///
+    /// # Remarks
+    /// This is a wrapper over `add_entry`
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
     pub fn audit(&mut self, sid: PSID, inheritable: bool, mask: DWORD, audit_success: bool, audit_fails: bool) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
@@ -817,6 +937,18 @@ impl ACL {
         self.add_entry(sid, AceType::SystemAudit, flags, mask)
     }
 
+    /// Adds a system mandatory level entry to the access control list. This sets the mandatory integrity level for the named object path.
+    ///
+    /// # Arguments
+    /// * `label_sid` - See `pLabelSid` in [AddMandatoryAce](https://docs.microsoft.com/en-us/windows/desktop/api/securitybaseapi/nf-securitybaseapi-addmandatoryace)
+    /// * `inheritable` - Denotes whether this entry should be inheritable by child objects.
+    /// * `policy` - See `MandatoryPolicy` in [AddMandatoryAce](https://docs.microsoft.com/en-us/windows/desktop/api/securitybaseapi/nf-securitybaseapi-addmandatoryace)
+    ///
+    /// # Remarks
+    /// This is a wrapper over `add_entry`
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
     pub fn integrity_level(&mut self, label_sid: PSID, inheritable: bool, policy: DWORD) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
@@ -826,6 +958,18 @@ impl ACL {
         self.add_entry(label_sid, AceType::SystemMandatoryLabel, flags, policy)
     }
 
+    /// Removes access control list entries that match the specified parameters.
+    ///
+    /// # Arguments
+    /// * `sid` - The target entry's raw SID.
+    /// * `entry_type` - The entry's type.
+    /// * `inheritable` - Denotes whether this entry should be inheritable by child objects.
+    ///
+    /// # Remarks
+    /// This is a wrapper over `remove_entry`
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
     pub fn remove(&mut self, sid: PSID, entry_type: Option<AceType>, inheritable: Option<bool>) -> Result<usize, DWORD> {
         let mut flags: Option<BYTE> = None;
         if let Some(inherit) = inheritable {
