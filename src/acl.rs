@@ -612,7 +612,6 @@ impl EntryCallback for RemoveEntryCallback {
                 }
             } else {
                 if let Some(mask) = self.flags {
-                    println!("type={:?} flags = {:08x}, mask = {:08x}", entry.entry_type, entry.flags, mask);
                     if (entry.flags & mask) == mask {
                         // NOTE(andy) sid and flag mask all match, remove it!
                         self.removed += 1;
