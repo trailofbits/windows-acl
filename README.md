@@ -1,6 +1,9 @@
 # windows-acl
 Rust library to simplify Windows ACL operations.
 
+## Example Applications
+See `example/query_acl.rs`
+
 ## Unit Tests
 The current unit tests expect to be run in a single threaded environment with elevated privileges. By default, Rust executes unit tests with multiple threads. To successfully run tests, the following must be done:
 

@@ -442,7 +442,6 @@ fn add_remove_sacl_mil() {
 
     assert!(acl_entry_exists(&entries, &expected).is_some());
 
-    // TODO(andy): Remove integrity level
     match acl.remove(low_mil_sid.as_ptr() as PSID, Some(AceType::SystemMandatoryLabel), Some(false)) {
         Ok(x) => assert_eq!(x, 1),
         Err(x) => {
@@ -452,7 +451,6 @@ fn add_remove_sacl_mil() {
         }
     }
 
-    // TODO(andy): Make sure it is actually removed
     entries = acl.all().unwrap_or(Vec::new());
     assert_ne!(entries.len(), 0);
 
@@ -521,10 +519,63 @@ fn add_remove_sacl_audit() {
 }
 
 
-// TODO(andy): Test ACL.get by having two entries with the same fields except type (allow vs deny) and have get only retrieve the deny ACL entry
+// Make sure ACL::get and ACL::remove work as we expect
 #[test]
-fn acl_get_test() {}
+fn acl_get_and_remove_test() {
+    assert!(run_ps_script("setup_acl_test.ps1"));
 
-// TODO(andy): Test ACL.remove_entry by having two entries with the same entries except different type (allow vs deny) and different flags (inherit vs no-inherit)
-#[test]
-fn acl_remove_entry_test() {}
+    let mut path_obj = support_path().unwrap_or(PathBuf::new());
+    path_obj.push("acl_get_and_remove");
+    assert!(path_obj.exists());
+
+    let guest = string_sid_by_user("Guest");
+    let guest_sid = match string_to_sid(&guest) {
+        Ok(x) => x,
+        Err(x) => {
+            println!("string_to_sid failed for {}: GLE={}", guest, x);
+            assert_eq!(x, 0);
+            return;
+        }
+    };
+
+    let world = string_sid_by_user("Everyone");
+    let world_sid = string_to_sid(&world).unwrap_or(Vec::new());
+    assert_ne!(world_sid.capacity(), 0);
+
+    let path = path_obj.to_str().unwrap_or("");
+    assert_ne!(path.len(), 0);
+
+    let acl_result = ACL::from_file_path(path, true);
+    assert!(acl_result.is_ok());
+
+    let mut acl = acl_result.unwrap();
+
+    let mut results = acl.get(world_sid.as_ptr() as PSID, None).unwrap_or_else(
+        |_x| {
+            assert!(false);
+            Vec::new()
+        }
+    );
+    assert_eq!(results.len(), 0);
+
+    results = acl.get(guest_sid.as_ptr() as PSID, None).unwrap_or(Vec::new());
+    assert_eq!(results.len(), 3);
+
+    results = acl.get(guest_sid.as_ptr() as PSID, Some(AceType::AccessAllow)).unwrap_or(Vec::new());
+    assert_eq!(results.len(), 1);
+
+    results = acl.get(guest_sid.as_ptr() as PSID, Some(AceType::AccessDeny)).unwrap_or(Vec::new());
+    assert_eq!(results.len(), 1);
+
+    results = acl.get(guest_sid.as_ptr() as PSID, Some(AceType::SystemAudit)).unwrap_or(Vec::new());
+    assert_eq!(results.len(), 1);
+
+    let mut removed = acl.remove(guest_sid.as_ptr() as PSID, Some(AceType::AccessDeny), None).unwrap_or(0);
+    assert_eq!(removed, 1);
+
+    results = acl.get(guest_sid.as_ptr() as PSID, None).unwrap_or(Vec::new());
+    assert_eq!(results.len(), 2);
+
+    removed = acl.remove(guest_sid.as_ptr() as PSID, None, None).unwrap_or(0);
+    assert_eq!(removed, 2);
+}

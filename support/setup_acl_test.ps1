@@ -74,7 +74,8 @@ $testFiles = @(
     "dacl_deny_file",
     "dacl_allow_file",
     "sacl_audit_file",
-    "sacl_mil_file"
+    "sacl_mil_file",
+    "acl_get_and_remove"
 )
 
 ForEach ($testDir in $testDirs) {
@@ -150,4 +151,17 @@ $userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $curre
 
 $acl = Get-Acl -Path $queryPath
 $null = $acl.SetAccessRule($userRule)
+$acl | Set-Acl -Path $queryPath
+
+# Setup acl_get_and_remove
+$queryPath = Join-Path -Path $supportPath -ChildPath "acl_get_and_remove"
+
+$readRule = New-Object System.Security.AccessControl.FileSystemAccessRule "Guest", "Read", "Allow"
+$writeRule = New-Object System.Security.AccessControl.FileSystemAccessRule "Guest", "Write", "Deny"
+$auditRule = New-Object System.Security.AccessControl.FileSystemAuditRule "Guest", "Read, Write", "Success,Failure"
+
+$acl = Get-Acl -Path $queryPath
+$null = $acl.SetAccessRule($writeRule)
+$null = $acl.SetAccessRule($readRule)
+$null = $acl.SetAuditRule($auditRule)
 $acl | Set-Acl -Path $queryPath

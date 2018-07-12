@@ -611,9 +611,19 @@ impl EntryCallback for RemoveEntryCallback {
                     }
                 }
             } else {
-                // NOTE(andy): No target type means all entries with matching sid are removed
-                self.removed += 1;
-                return true;
+                if let Some(mask) = self.flags {
+                    println!("type={:?} flags = {:08x}, mask = {:08x}", entry.entry_type, entry.flags, mask);
+                    if (entry.flags & mask) == mask {
+                        // NOTE(andy) sid and flag mask all match, remove it!
+                        self.removed += 1;
+                        return true;
+                    }
+                } else {
+                    // NOTE(andy): We don't have a flags mask to search for so since the sid matches
+                    //             this is an item we want to remove
+                    self.removed += 1;
+                    return true;
+                }
             }
         }
 
@@ -1002,8 +1012,6 @@ impl ACL {
         if let Some(inherit) = inheritable {
             if inherit {
                 flags = Some(CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE);
-            } else {
-                flags = None;
             }
         }
 
