@@ -27,7 +27,7 @@ use windows_acl::acl::ACL;
 <pre>
     let high_integrity_level_sid = string_to_sid("S-1-16-12288").unwrap();
 
-    let mut acl = ACL::from_file_path("C:\\Users\\user\\work\\high_il", true).unwrap();
+    let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\high_il", true).unwrap();
 
     // Set high_il to be a high integrity level directory
     match acl.integrity_level(
@@ -52,7 +52,7 @@ use windows_acl::acl::ACL;
 <pre>
     let world_sid = string_to_sid("S-1-1-0").unwrap();
 
-    let mut acl = ACL::from_file_path("C:\\Users\\user\\work\\sensitive_files", true).unwrap();
+    let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\sensitive_files", true).unwrap();
 
     // Audit every file operation in sensitive_files from anyone in the Everyone group
     match acl.audit(
@@ -77,7 +77,7 @@ use windows_acl::acl::ACL;
 <pre>
     let guests = string_to_sid("S-1-5-32-546").unwrap();
 
-    let mut acl = ACL::from_file_path("C:\\Users\\user\\work\\sensitive_files", false).unwrap();
+    let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\sensitive_files", false).unwrap();
 
     // Guests cannot read anything in this directory. However, they can still drop files there
     match acl.deny(guests.as_ptr() as PSID, true, FILE_GENERIC_READ) {
@@ -96,7 +96,7 @@ use windows_acl::acl::ACL;
 <pre>
     let world_sid = string_to_sid("S-1-1-0").unwrap();
 
-    let mut acl = ACL::from_file_path("C:\\Users\\user\\work\\sensitive_files", true).unwrap();
+    let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\sensitive_files", true).unwrap();
 
     // Remove a SystemAudit entry; remove() can also remove DACL entries as well
     match acl.remove(world_sid.as_ptr() as PSID, Some(AceType::SystemAudit), None) {
