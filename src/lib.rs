@@ -8,7 +8,11 @@ extern crate widestring;
 extern crate winapi;
 
 pub mod acl;
-pub mod utils;
+mod utils;
+
+pub mod helper {
+    pub use utils::{sid_to_string, name_to_sid, string_to_sid, current_user};
+}
 
 #[cfg(test)]
 mod tests;

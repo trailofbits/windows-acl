@@ -21,7 +21,7 @@ use winapi::um::winnt::{
 use windows_acl::acl::{
     ACL, ACLEntry, AceType, ObjectType,
 };
-use windows_acl::utils::{
+use windows_acl::helper::{
     sid_to_string
 };
 

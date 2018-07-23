@@ -1,4 +1,4 @@
-//! Contains utility functions for converting between raw SID and SID string representations.
+//! Contains helper functions for converting between raw SID and SID string representations.
 
 #![allow(non_snake_case)]
 
