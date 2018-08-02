@@ -1,7 +1,7 @@
 [package]
 name = "windows-acl"
 version = "0.1.0"
-authors = ["yying"]
+authors = ["yying <andy@trailofbits.com>"]
 
 [lib]
 name = "windows_acl"
@@ -13,5 +13,6 @@ libc = "0.2.40"
 widestring = "0.3.0"
 
 [dependencies.winapi]
-version = "0.3.5"
+git = "https://github.com/yying/winapi-rs"
+branch = "features/procthreadattrs"
 features = ["aclapi", "errhandlingapi", "handleapi", "sddl", "securitybaseapi", "winbase", "winerror"]
