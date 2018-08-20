@@ -7,7 +7,7 @@ documentation = "https://trailofbits.github.io/windows-acl"
 homepage = "https://trailofbits.github.io/windows-acl"
 repository = "https://github.com/trailofbits/windows-acl"
 readme = "README.md"
-keywords = ["windows", "acl", "security", "win32", "windows apis"]
+keywords = ["windows", "acl", "security", "win32"]
 categories = ["os", "os::windows-apis"]
 license-file = "LICENSE"
 
