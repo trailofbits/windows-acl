@@ -258,7 +258,7 @@ fn add_and_remove_dacl_allow_test() {
     assert_ne!(path.len(), 0);
 
     // NOTE(andy): create() opens for write only or creates new if path doesn't exist. Since we know
-    //             that the path exists (see line 191), this will attempt to open for write, which
+    //             that the path exists (see line 255), this will attempt to open for write, which
     //             should fail
     assert!(File::create(path).is_err());
 

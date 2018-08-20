@@ -103,11 +103,13 @@ function ResetDaclEntries {
     $userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read", "Allow"
     $adminRule = New-Object System.Security.AccessControl.FileSystemAccessRule "Administrators", "Read", "Allow"
     $everyoneRule = New-Object System.Security.AccessControl.FileSystemAccessRule "Everyone", "Read", "Allow"
-
+    $authusersRule = New-Object System.Security.AccessControl.FileSystemAccessRule "Authenticated Users", "Read", "Allow"
+    
     $acl = Get-Acl -Path $Path
     $acl.RemoveAccessRuleAll($userRule)
     $acl.RemoveAccessRuleAll($adminRule)
     $acl.RemoveAccessRuleAll($everyoneRule)
+    $acl.RemoveAccessRuleAll($authusersRule)
     $acl | Set-Acl -Path $Path    
 }
 
