@@ -27,9 +27,9 @@ use winapi::um::securitybaseapi::{AdjustTokenPrivileges, CopySid, GetLengthSid};
 use winapi::um::winbase::{GetUserNameW, LocalFree, LookupAccountNameW, LookupPrivilegeValueW};
 use winapi::um::winnt::{
     DACL_SECURITY_INFORMATION, GROUP_SECURITY_INFORMATION, LABEL_SECURITY_INFORMATION,
-    OWNER_SECURITY_INFORMATION, PACL, PSECURITY_DESCRIPTOR, PSID, PTOKEN_PRIVILEGES,
-    SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED, SID_NAME_USE, TOKEN_ADJUST_PRIVILEGES,
-    TOKEN_PRIVILEGES, TOKEN_QUERY,
+    OWNER_SECURITY_INFORMATION, PACL, PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+    PSID, PTOKEN_PRIVILEGES, SACL_SECURITY_INFORMATION, SE_PRIVILEGE_ENABLED, SID_NAME_USE,
+    TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
 };
 
 /// Converts a raw SID into a SID string representation.
@@ -367,7 +367,7 @@ impl SecurityDescriptor {
 
         let mut flags = 0;
         if dacl_ptr != (NULL as PACL) {
-            flags |= DACL_SECURITY_INFORMATION;
+            flags |= DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION;
         }
 
         let privilege: Option<SystemPrivilege>;
