@@ -11,7 +11,7 @@ pub mod acl;
 mod utils;
 
 pub mod helper {
-    pub use utils::{sid_to_string, name_to_sid, string_to_sid, current_user};
+    pub use utils::{current_user, name_to_sid, sid_to_string, string_to_sid};
 }
 
 #[cfg(test)]

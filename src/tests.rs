@@ -1,23 +1,18 @@
 #![cfg(windows)]
 
-use acl::{
-    ACL, AceType, ACLEntry
-};
+use acl::{ACLEntry, AceType, ACL};
 use std::env::current_exe;
 use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Once, ONCE_INIT};
-use utils::{
-    name_to_sid, sid_to_string, string_to_sid, current_user
-};
-use winapi::shared::winerror::{
-    ERROR_NOT_ALL_ASSIGNED
-};
+use utils::{current_user, name_to_sid, sid_to_string, string_to_sid};
+use winapi::shared::winerror::ERROR_NOT_ALL_ASSIGNED;
 use winapi::um::winnt::{
-    PSID, FILE_GENERIC_READ, FILE_GENERIC_EXECUTE, FILE_GENERIC_WRITE, FILE_ALL_ACCESS, SYNCHRONIZE,
-    SUCCESSFUL_ACCESS_ACE_FLAG, FAILED_ACCESS_ACE_FLAG, SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
-    SYSTEM_MANDATORY_LABEL_NO_READ_UP, SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP
+    FAILED_ACCESS_ACE_FLAG, FILE_ALL_ACCESS, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ,
+    FILE_GENERIC_WRITE, PSID, SUCCESSFUL_ACCESS_ACE_FLAG, SYNCHRONIZE,
+    SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP, SYSTEM_MANDATORY_LABEL_NO_READ_UP,
+    SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
 };
 
 static START: Once = ONCE_INIT;
@@ -31,7 +26,7 @@ fn support_path() -> Option<PathBuf> {
 
             if path.exists() {
                 path.push("testfiles");
-                return Some(path)
+                return Some(path);
             }
 
             path.pop();
@@ -51,15 +46,18 @@ fn run_ps_script(file_name: &str) -> bool {
         if let Some(script_path) = path.to_str() {
             let mut process = match Command::new("PowerShell.exe")
                 .args(&["-ExecutionPolicy", "bypass", "-File", script_path])
-                .spawn() {
+                .spawn()
+            {
                 Ok(process) => process,
-                _ => { return false; }
+                _ => {
+                    return false;
+                }
             };
 
             match process.wait() {
                 Ok(_code) => {
                     return true;
-                },
+                }
                 Err(_code) => {
                     return false;
                 }
@@ -118,10 +116,11 @@ fn acl_entry_exists(entries: &Vec<ACLEntry>, expected: &ACLEntry) -> Option<usiz
     for i in 0..(entries.len()) {
         let entry = &entries[i];
 
-        if entry.entry_type == expected.entry_type &&
-            entry.string_sid == expected.string_sid &&
-            entry.flags == expected.flags &&
-            entry.mask == expected.mask {
+        if entry.entry_type == expected.entry_type
+            && entry.string_sid == expected.string_sid
+            && entry.flags == expected.flags
+            && entry.mask == expected.mask
+        {
             return Some(i);
         }
     }
@@ -267,10 +266,17 @@ fn add_and_remove_dacl_allow_test() {
 
     let mut acl = acl_result.unwrap();
 
-    match acl.allow(current_user_sid.as_ptr() as PSID, false, FILE_GENERIC_READ | FILE_GENERIC_WRITE) {
+    match acl.allow(
+        current_user_sid.as_ptr() as PSID,
+        false,
+        FILE_GENERIC_READ | FILE_GENERIC_WRITE,
+    ) {
         Ok(x) => assert!(x),
         Err(x) => {
-            println!("ACL.allow failed for adding allow ACE for {} to FILE_GENERIC_READ: GLE={}", &current_user, x);
+            println!(
+                "ACL.allow failed for adding allow ACE for {} to FILE_GENERIC_READ: GLE={}",
+                &current_user, x
+            );
             assert!(false);
             return;
         }
@@ -289,7 +295,7 @@ fn add_and_remove_dacl_allow_test() {
     expected.mask = FILE_GENERIC_READ | FILE_GENERIC_WRITE;
 
     match acl_entry_exists(&entries, &expected) {
-        Some(_i) => {},
+        Some(_i) => {}
         None => {
             println!("Expected AccessAllow entry does not exist!");
             assert!(false);
@@ -297,10 +303,17 @@ fn add_and_remove_dacl_allow_test() {
         }
     };
 
-    match acl.remove(current_user_sid.as_ptr() as PSID, Some(AceType::AccessAllow), Some(false)) {
+    match acl.remove(
+        current_user_sid.as_ptr() as PSID,
+        Some(AceType::AccessAllow),
+        Some(false),
+    ) {
         Ok(x) => assert_eq!(x, 1),
         Err(x) => {
-            println!("ACL.remove failed for removing allow ACE for {} to FILE_GENERIC_READ: GLE={}", &current_user, x);
+            println!(
+                "ACL.remove failed for removing allow ACE for {} to FILE_GENERIC_READ: GLE={}",
+                &current_user, x
+            );
             assert!(false);
             return;
         }
@@ -311,7 +324,7 @@ fn add_and_remove_dacl_allow_test() {
     entries = acl.all().unwrap_or(Vec::new());
     assert_ne!(entries.len(), 0);
     match acl_entry_exists(&entries, &expected) {
-        None => {},
+        None => {}
         Some(i) => {
             println!("Did not expect to find AccessAllow entry at {}", i);
             assert!(false);
@@ -356,7 +369,10 @@ fn add_and_remove_dacl_deny_test() {
     match acl.deny(current_user_sid.as_ptr() as PSID, false, FILE_GENERIC_WRITE) {
         Ok(x) => assert!(x),
         Err(x) => {
-            println!("ACL.deny failed for adding allow ACE for {} to FILE_GENERIC_READ: GLE={}", current_user, x);
+            println!(
+                "ACL.deny failed for adding allow ACE for {} to FILE_GENERIC_READ: GLE={}",
+                current_user, x
+            );
             assert!(false);
             return;
         }
@@ -375,7 +391,7 @@ fn add_and_remove_dacl_deny_test() {
     expected.mask = FILE_GENERIC_WRITE;
 
     match acl_entry_exists(&entries, &expected) {
-        Some(_i) => { },
+        Some(_i) => {}
         None => {
             println!("Expected AccessDeny entry does not exist!");
             assert!(false);
@@ -383,10 +399,17 @@ fn add_and_remove_dacl_deny_test() {
         }
     }
 
-    match acl.remove(current_user_sid.as_ptr() as PSID, Some(AceType::AccessDeny), Some(false)) {
+    match acl.remove(
+        current_user_sid.as_ptr() as PSID,
+        Some(AceType::AccessDeny),
+        Some(false),
+    ) {
         Ok(x) => assert_eq!(x, 1),
         Err(x) => {
-            println!("ACL.remove failed for removing deny ACE for {} to FILE_GENERIC_READ: GLE={}", current_user, x);
+            println!(
+                "ACL.remove failed for removing deny ACE for {} to FILE_GENERIC_READ: GLE={}",
+                current_user, x
+            );
             assert!(false);
             return;
         }
@@ -398,7 +421,7 @@ fn add_and_remove_dacl_deny_test() {
     assert_ne!(entries.len(), 0);
 
     match acl_entry_exists(&entries, &expected) {
-        None => {},
+        None => {}
         Some(i) => {
             println!("AccessDeny unexpectedly exists at {}", i);
             assert!(false);
@@ -435,10 +458,19 @@ fn add_remove_sacl_mil() {
     assert!(acl_result.is_ok());
 
     let mut acl = acl_result.unwrap();
-    match acl.integrity_level(low_mil_sid.as_ptr() as PSID, false, SYSTEM_MANDATORY_LABEL_NO_WRITE_UP | SYSTEM_MANDATORY_LABEL_NO_READ_UP | SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP) {
+    match acl.integrity_level(
+        low_mil_sid.as_ptr() as PSID,
+        false,
+        SYSTEM_MANDATORY_LABEL_NO_WRITE_UP
+            | SYSTEM_MANDATORY_LABEL_NO_READ_UP
+            | SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP,
+    ) {
         Ok(x) => assert!(x),
         Err(x) => {
-            println!("ACL.integrity_level failed for {}: GLE={}", &low_mil_string_sid, x);
+            println!(
+                "ACL.integrity_level failed for {}: GLE={}",
+                &low_mil_string_sid, x
+            );
             assert!(false);
             return;
         }
@@ -451,14 +483,23 @@ fn add_remove_sacl_mil() {
     expected.entry_type = AceType::SystemMandatoryLabel;
     expected.string_sid = low_mil_string_sid.to_string();
     expected.flags = 0;
-    expected.mask = SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP | SYSTEM_MANDATORY_LABEL_NO_READ_UP | SYSTEM_MANDATORY_LABEL_NO_WRITE_UP;
+    expected.mask = SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP
+        | SYSTEM_MANDATORY_LABEL_NO_READ_UP
+        | SYSTEM_MANDATORY_LABEL_NO_WRITE_UP;
 
     assert!(acl_entry_exists(&entries, &expected).is_some());
 
-    match acl.remove(low_mil_sid.as_ptr() as PSID, Some(AceType::SystemMandatoryLabel), Some(false)) {
+    match acl.remove(
+        low_mil_sid.as_ptr() as PSID,
+        Some(AceType::SystemMandatoryLabel),
+        Some(false),
+    ) {
         Ok(x) => assert_eq!(x, 1),
         Err(x) => {
-            println!("ACL.remove failed for removing mandatory ACE for {}: GLE={}", low_mil_string_sid, x);
+            println!(
+                "ACL.remove failed for removing mandatory ACE for {}: GLE={}",
+                low_mil_string_sid, x
+            );
             assert!(false);
             return;
         }
@@ -498,7 +539,13 @@ fn add_remove_sacl_audit() {
     assert!(acl_result.is_ok());
 
     let mut acl = acl_result.unwrap();
-    match acl.audit(current_user_sid.as_ptr() as PSID, false, FILE_GENERIC_READ, true, true) {
+    match acl.audit(
+        current_user_sid.as_ptr() as PSID,
+        false,
+        FILE_GENERIC_READ,
+        true,
+        true,
+    ) {
         Ok(x) => assert!(x),
         Err(x) => {
             println!("ACL.audit failed for {}: GLE={}", &current_user, x);
@@ -518,10 +565,17 @@ fn add_remove_sacl_audit() {
 
     assert!(acl_entry_exists(&entries, &expected).is_some());
 
-    match acl.remove(current_user_sid.as_ptr() as PSID, Some(AceType::SystemAudit), Some(false)) {
+    match acl.remove(
+        current_user_sid.as_ptr() as PSID,
+        Some(AceType::SystemAudit),
+        Some(false),
+    ) {
         Ok(x) => assert_eq!(x, 1),
         Err(x) => {
-            println!("ACL.remove failed for removing mandatory ACE for {}: GLE={}", &current_user, x);
+            println!(
+                "ACL.remove failed for removing mandatory ACE for {}: GLE={}",
+                &current_user, x
+            );
             assert!(false);
             return;
         }
@@ -532,7 +586,6 @@ fn add_remove_sacl_audit() {
 
     assert!(acl_entry_exists(&entries, &expected).is_none());
 }
-
 
 // Make sure ACL::get and ACL::remove work as we expect
 #[test]
@@ -567,32 +620,46 @@ fn acl_get_and_remove_test() {
 
     let mut acl = acl_result.unwrap();
 
-    let mut results = acl.get(world_sid.as_ptr() as PSID, None).unwrap_or_else(
-        |_x| {
+    let mut results = acl
+        .get(world_sid.as_ptr() as PSID, None)
+        .unwrap_or_else(|_x| {
             assert!(false);
             Vec::new()
-        }
-    );
+        });
     assert_eq!(results.len(), 0);
 
-    results = acl.get(guest_sid.as_ptr() as PSID, None).unwrap_or(Vec::new());
+    results = acl
+        .get(guest_sid.as_ptr() as PSID, None)
+        .unwrap_or(Vec::new());
     assert_eq!(results.len(), 3);
 
-    results = acl.get(guest_sid.as_ptr() as PSID, Some(AceType::AccessAllow)).unwrap_or(Vec::new());
+    results = acl
+        .get(guest_sid.as_ptr() as PSID, Some(AceType::AccessAllow))
+        .unwrap_or(Vec::new());
     assert_eq!(results.len(), 1);
 
-    results = acl.get(guest_sid.as_ptr() as PSID, Some(AceType::AccessDeny)).unwrap_or(Vec::new());
+    results = acl
+        .get(guest_sid.as_ptr() as PSID, Some(AceType::AccessDeny))
+        .unwrap_or(Vec::new());
     assert_eq!(results.len(), 1);
 
-    results = acl.get(guest_sid.as_ptr() as PSID, Some(AceType::SystemAudit)).unwrap_or(Vec::new());
+    results = acl
+        .get(guest_sid.as_ptr() as PSID, Some(AceType::SystemAudit))
+        .unwrap_or(Vec::new());
     assert_eq!(results.len(), 1);
 
-    let mut removed = acl.remove(guest_sid.as_ptr() as PSID, Some(AceType::AccessDeny), None).unwrap_or(0);
+    let mut removed = acl
+        .remove(guest_sid.as_ptr() as PSID, Some(AceType::AccessDeny), None)
+        .unwrap_or(0);
     assert_eq!(removed, 1);
 
-    results = acl.get(guest_sid.as_ptr() as PSID, None).unwrap_or(Vec::new());
+    results = acl
+        .get(guest_sid.as_ptr() as PSID, None)
+        .unwrap_or(Vec::new());
     assert_eq!(results.len(), 2);
 
-    removed = acl.remove(guest_sid.as_ptr() as PSID, None, None).unwrap_or(0);
+    removed = acl
+        .remove(guest_sid.as_ptr() as PSID, None, None)
+        .unwrap_or(0);
     assert_eq!(removed, 2);
 }
