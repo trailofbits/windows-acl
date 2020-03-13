@@ -1,4 +1,7 @@
 # windows-acl
+
+[![Build Status](https://img.shields.io/github/workflow/status/trailofbits/windows-acl/CI/master)](https://github.com/trailofbits/windows-acl/actions?query=workflow%3ACI)
+
 Rust library to simplify Windows ACL operations.
 
 ## Using windows-acl
@@ -14,8 +17,8 @@ extern crate winapi;
 extern crate windows_acl;
 
 use winapi::um::winnt::{
-    PSID, FILE_GENERIC_READ, FILE_GENERIC_EXECUTE, FILE_GENERIC_WRITE, 
-    FILE_ALL_ACCESS, SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, 
+    PSID, FILE_GENERIC_READ, FILE_GENERIC_EXECUTE, FILE_GENERIC_WRITE,
+    FILE_ALL_ACCESS, SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
     SYSTEM_MANDATORY_LABEL_NO_READ_UP, SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP
 };
 use windows_acl::acl::ACL;
