@@ -7,36 +7,34 @@ use field_offset::*;
 
 use std::fmt;
 use std::mem;
-use utils::{
-    SecurityDescriptor, sid_to_string
-};
-use winapi::shared::minwindef::{
-    BYTE, DWORD, LPVOID, WORD, FALSE,
-};
+use utils::{sid_to_string, SecurityDescriptor};
+use winapi::shared::minwindef::{BYTE, DWORD, FALSE, LPVOID, WORD};
 use winapi::shared::ntdef::NULL;
 use winapi::um::accctrl::{
-    SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
-    SE_SERVICE, SE_UNKNOWN_OBJECT_TYPE, SE_PRINTER, SE_LMSHARE, SE_DS_OBJECT, SE_DS_OBJECT_ALL,
-    SE_PROVIDER_DEFINED_OBJECT, SE_WINDOW_OBJECT, SE_WMIGUID_OBJECT,
+    SE_DS_OBJECT, SE_DS_OBJECT_ALL, SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_LMSHARE, SE_OBJECT_TYPE,
+    SE_PRINTER, SE_PROVIDER_DEFINED_OBJECT, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY, SE_SERVICE,
+    SE_UNKNOWN_OBJECT_TYPE, SE_WINDOW_OBJECT, SE_WMIGUID_OBJECT,
 };
 use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::securitybaseapi::{
-    AddAce, CopySid, EqualSid, GetAce, GetAclInformation, GetLengthSid, InitializeAcl, IsValidAcl,
-    IsValidSid, AddAccessAllowedAceEx, AddAccessDeniedAceEx, AddAuditAccessAceEx, AddMandatoryAce,
+    AddAccessAllowedAceEx, AddAccessDeniedAceEx, AddAce, AddAuditAccessAceEx, AddMandatoryAce,
+    CopySid, EqualSid, GetAce, GetAclInformation, GetLengthSid, InitializeAcl, IsValidAcl,
+    IsValidSid,
 };
 use winapi::um::winnt::{
-    ACCESS_ALLOWED_ACE, ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE,
+    AclSizeInformation, ACCESS_ALLOWED_ACE, ACCESS_ALLOWED_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_ACE,
     ACCESS_ALLOWED_CALLBACK_ACE_TYPE, ACCESS_ALLOWED_CALLBACK_OBJECT_ACE,
-    ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_ALLOWED_OBJECT_ACE, ACCESS_ALLOWED_OBJECT_ACE_TYPE,
-    ACCESS_DENIED_ACE, ACCESS_DENIED_ACE_TYPE, ACCESS_DENIED_CALLBACK_ACE, ACCESS_DENIED_CALLBACK_ACE_TYPE,
-    ACCESS_DENIED_CALLBACK_OBJECT_ACE, ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_DENIED_OBJECT_ACE,
-    ACCESS_DENIED_OBJECT_ACE_TYPE, ACCESS_MASK, ACL as _ACL, PACE_HEADER, PACL, PSID, SYSTEM_AUDIT_ACE, SYSTEM_AUDIT_ACE_TYPE,
+    ACCESS_ALLOWED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_ALLOWED_OBJECT_ACE,
+    ACCESS_ALLOWED_OBJECT_ACE_TYPE, ACCESS_DENIED_ACE, ACCESS_DENIED_ACE_TYPE,
+    ACCESS_DENIED_CALLBACK_ACE, ACCESS_DENIED_CALLBACK_ACE_TYPE, ACCESS_DENIED_CALLBACK_OBJECT_ACE,
+    ACCESS_DENIED_CALLBACK_OBJECT_ACE_TYPE, ACCESS_DENIED_OBJECT_ACE,
+    ACCESS_DENIED_OBJECT_ACE_TYPE, ACCESS_MASK, ACL as _ACL, ACL_REVISION_DS, ACL_SIZE_INFORMATION,
+    CONTAINER_INHERIT_ACE, FAILED_ACCESS_ACE_FLAG, INHERITED_ACE, MAXDWORD, OBJECT_INHERIT_ACE,
+    PACE_HEADER, PACL, PSID, SUCCESSFUL_ACCESS_ACE_FLAG, SYSTEM_AUDIT_ACE, SYSTEM_AUDIT_ACE_TYPE,
     SYSTEM_AUDIT_CALLBACK_ACE, SYSTEM_AUDIT_CALLBACK_ACE_TYPE, SYSTEM_AUDIT_CALLBACK_OBJECT_ACE,
     SYSTEM_AUDIT_CALLBACK_OBJECT_ACE_TYPE, SYSTEM_AUDIT_OBJECT_ACE, SYSTEM_AUDIT_OBJECT_ACE_TYPE,
     SYSTEM_MANDATORY_LABEL_ACE, SYSTEM_MANDATORY_LABEL_ACE_TYPE, SYSTEM_RESOURCE_ATTRIBUTE_ACE,
-    SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE, MAXDWORD, ACL_REVISION_DS, AclSizeInformation, ACL_SIZE_INFORMATION,
-    CONTAINER_INHERIT_ACE, OBJECT_INHERIT_ACE, SUCCESSFUL_ACCESS_ACE_FLAG, FAILED_ACCESS_ACE_FLAG,
-    INHERITED_ACE,
+    SYSTEM_RESOURCE_ATTRIBUTE_ACE_TYPE,
 };
 
 /// This enum is almost a direct mapping with the values described in
@@ -73,7 +71,7 @@ impl From<ObjectType> for SE_OBJECT_TYPE {
             ObjectType::ProviderDefinedObject => SE_PROVIDER_DEFINED_OBJECT,
             ObjectType::WmiGuidObject => SE_WMIGUID_OBJECT,
             ObjectType::RegistryWow6432Key => SE_REGISTRY_WOW64_32KEY,
-            _ => SE_UNKNOWN_OBJECT_TYPE
+            _ => SE_UNKNOWN_OBJECT_TYPE,
         }
     }
 }
@@ -93,7 +91,7 @@ impl From<SE_OBJECT_TYPE> for ObjectType {
             SE_PROVIDER_DEFINED_OBJECT => ObjectType::ProviderDefinedObject,
             SE_WMIGUID_OBJECT => ObjectType::WmiGuidObject,
             SE_REGISTRY_WOW64_32KEY => ObjectType::RegistryWow6432Key,
-            _ => ObjectType::Unknown
+            _ => ObjectType::Unknown,
         }
     }
 }
@@ -143,7 +141,7 @@ pub struct ACLEntry {
     pub sid: Option<Vec<u16>>,
 
     /// The target entity's SID in string representation
-    pub string_sid: String
+    pub string_sid: String,
 }
 
 /// `ACL` represents the access control list (discretionary or oth discretionary/system) for a named object
@@ -167,7 +165,7 @@ impl ACLEntry {
             flags: 0,
             mask: 0,
             sid: None,
-            string_sid: "".to_string()
+            string_sid: "".to_string(),
         }
     }
 }
@@ -187,7 +185,7 @@ impl fmt::Display for ObjectType {
             ObjectType::DsObjectAll => "DsObjectAll",
             ObjectType::ProviderDefinedObject => "ProviderDefinedObject",
             ObjectType::WmiGuidObject => "WmiGuidObject",
-            ObjectType::RegistryWow6432Key => "RegistryWow6432Key"
+            ObjectType::RegistryWow6432Key => "RegistryWow6432Key",
         };
         write!(f, "{}", obj_type)
     }
@@ -210,7 +208,7 @@ impl fmt::Display for AceType {
             AceType::SystemAuditObject => "SystemAuditObject",
             AceType::SystemAuditCallbackObject => "SystemAuditCallbackObject",
             AceType::SystemMandatoryLabel => "SystemMandatoryLabel",
-            AceType::SystemResourceAttribute => "SystemResourceAttribute"
+            AceType::SystemResourceAttribute => "SystemResourceAttribute",
         };
         write!(f, "{}", entry_type)
     }
@@ -256,11 +254,14 @@ fn acl_size(acl: PACL) -> Option<DWORD> {
     }
 
     if unsafe {
-        GetAclInformation(acl,
-                          mem::transmute::<&mut ACL_SIZE_INFORMATION, LPVOID>(&mut si),
-                          mem::size_of::<ACL_SIZE_INFORMATION>() as DWORD,
-                          AclSizeInformation)
-    } == 0 {
+        GetAclInformation(
+            acl,
+            mem::transmute::<&mut ACL_SIZE_INFORMATION, LPVOID>(&mut si),
+            mem::size_of::<ACL_SIZE_INFORMATION>() as DWORD,
+            AclSizeInformation,
+        )
+    } == 0
+    {
         return None;
     }
 
@@ -270,20 +271,32 @@ fn acl_size(acl: PACL) -> Option<DWORD> {
 fn acl_entry_size(entry_type: AceType) -> Option<DWORD> {
     match entry_type {
         AceType::AccessAllow => Some(mem::size_of::<ACCESS_ALLOWED_ACE>() as DWORD),
-        AceType::AccessAllowCallback => Some(mem::size_of::<ACCESS_ALLOWED_CALLBACK_ACE>() as DWORD),
+        AceType::AccessAllowCallback => {
+            Some(mem::size_of::<ACCESS_ALLOWED_CALLBACK_ACE>() as DWORD)
+        }
         AceType::AccessAllowObject => Some(mem::size_of::<ACCESS_ALLOWED_OBJECT_ACE>() as DWORD),
-        AceType::AccessAllowCallbackObject => Some(mem::size_of::<ACCESS_ALLOWED_CALLBACK_OBJECT_ACE>() as DWORD),
+        AceType::AccessAllowCallbackObject => {
+            Some(mem::size_of::<ACCESS_ALLOWED_CALLBACK_OBJECT_ACE>() as DWORD)
+        }
         AceType::AccessDeny => Some(mem::size_of::<ACCESS_DENIED_ACE>() as DWORD),
         AceType::AccessDenyCallback => Some(mem::size_of::<ACCESS_DENIED_CALLBACK_ACE>() as DWORD),
         AceType::AccessDenyObject => Some(mem::size_of::<ACCESS_DENIED_OBJECT_ACE>() as DWORD),
-        AceType::AccessDenyCallbackObject => Some(mem::size_of::<ACCESS_DENIED_CALLBACK_OBJECT_ACE> as DWORD),
+        AceType::AccessDenyCallbackObject => {
+            Some(mem::size_of::<ACCESS_DENIED_CALLBACK_OBJECT_ACE> as DWORD)
+        }
         AceType::SystemAudit => Some(mem::size_of::<SYSTEM_AUDIT_ACE>() as DWORD),
         AceType::SystemAuditCallback => Some(mem::size_of::<SYSTEM_AUDIT_CALLBACK_ACE>() as DWORD),
         AceType::SystemAuditObject => Some(mem::size_of::<SYSTEM_AUDIT_OBJECT_ACE>() as DWORD),
-        AceType::SystemAuditCallbackObject => Some(mem::size_of::<SYSTEM_AUDIT_CALLBACK_OBJECT_ACE>() as DWORD),
-        AceType::SystemMandatoryLabel => Some(mem::size_of::<SYSTEM_MANDATORY_LABEL_ACE>() as DWORD),
-        AceType::SystemResourceAttribute => Some(mem::size_of::<SYSTEM_RESOURCE_ATTRIBUTE_ACE>() as DWORD),
-        _ => None
+        AceType::SystemAuditCallbackObject => {
+            Some(mem::size_of::<SYSTEM_AUDIT_CALLBACK_OBJECT_ACE>() as DWORD)
+        }
+        AceType::SystemMandatoryLabel => {
+            Some(mem::size_of::<SYSTEM_MANDATORY_LABEL_ACE>() as DWORD)
+        }
+        AceType::SystemResourceAttribute => {
+            Some(mem::size_of::<SYSTEM_RESOURCE_ATTRIBUTE_ACE>() as DWORD)
+        }
+        _ => None,
     }
 }
 
@@ -296,7 +309,14 @@ fn enumerate_acl_entries<T: EntryCallback>(pAcl: PACL, callback: &mut T) -> bool
     let ace_count = unsafe { (*pAcl).AceCount };
 
     for i in 0..ace_count {
-        if unsafe { GetAce(pAcl, i as DWORD, mem::transmute::<&mut PACE_HEADER, *mut LPVOID>(&mut hdr)) } == 0 {
+        if unsafe {
+            GetAce(
+                pAcl,
+                i as DWORD,
+                mem::transmute::<&mut PACE_HEADER, *mut LPVOID>(&mut hdr),
+            )
+        } == 0
+        {
             return false;
         }
 
@@ -308,7 +328,7 @@ fn enumerate_acl_entries<T: EntryCallback>(pAcl: PACL, callback: &mut T) -> bool
             flags: 0,
             mask: 0,
             sid: None,
-            string_sid: String::from("")
+            string_sid: String::from(""),
         };
 
         match unsafe { (*hdr).AceType } {
@@ -372,7 +392,7 @@ struct GetEntryCallback {
 }
 
 struct AllEntryCallback {
-    entries: Vec<ACLEntry>
+    entries: Vec<ACLEntry>,
 }
 
 struct AddEntryCallback {
@@ -396,7 +416,7 @@ impl EntryCallback for GetEntryCallback {
     fn on_entry(&mut self, _hdr: PACE_HEADER, entry: ACLEntry) -> bool {
         let pSid: PSID = match entry.sid {
             Some(ref sid) => sid.as_ptr() as PSID,
-            None => NULL as PSID
+            None => NULL as PSID,
         };
 
         if pSid == NULL {
@@ -425,8 +445,15 @@ impl EntryCallback for AllEntryCallback {
 }
 
 impl AddEntryCallback {
-    fn new(old_acl: PACL, sid: PSID, entry_type: AceType, flags: BYTE, mask: DWORD) -> Option<AddEntryCallback> {
-        let mut new_acl_size = acl_size(old_acl).unwrap_or(mem::size_of::<_ACL>() as DWORD) as usize;
+    fn new(
+        old_acl: PACL,
+        sid: PSID,
+        entry_type: AceType,
+        flags: BYTE,
+        mask: DWORD,
+    ) -> Option<AddEntryCallback> {
+        let mut new_acl_size =
+            acl_size(old_acl).unwrap_or(mem::size_of::<_ACL>() as DWORD) as usize;
         new_acl_size += acl_entry_size(entry_type)? as usize;
         new_acl_size += unsafe { GetLengthSid(sid) as usize } - mem::size_of::<DWORD>();
 
@@ -439,7 +466,14 @@ impl AddEntryCallback {
             already_added: false,
         };
 
-        if unsafe { InitializeAcl(obj.new_acl.as_mut_ptr() as PACL, new_acl_size as DWORD, ACL_REVISION_DS as DWORD) } == 0 {
+        if unsafe {
+            InitializeAcl(
+                obj.new_acl.as_mut_ptr() as PACL,
+                new_acl_size as DWORD,
+                ACL_REVISION_DS as DWORD,
+            )
+        } == 0
+        {
             return None;
         }
 
@@ -448,53 +482,45 @@ impl AddEntryCallback {
 
     fn insert_entry(&mut self) -> bool {
         let status = match self.entry_type {
-            AceType::AccessAllow => {
-                unsafe {
-                    AddAccessAllowedAceEx(
-                        self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION_DS as DWORD,
-                        self.entry_flags as DWORD,
-                        self.entry_mask,
-                        self.entry_sid,
-                    )
-                }
-            }
-            AceType::AccessDeny => {
-                unsafe {
-                    AddAccessDeniedAceEx(
-                        self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION_DS as DWORD,
-                        self.entry_flags as DWORD,
-                        self.entry_mask,
-                        self.entry_sid,
-                    )
-                }
-            }
-            AceType::SystemAudit => {
-                unsafe {
-                    AddAuditAccessAceEx(
-                        self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION_DS as DWORD,
-                        self.entry_flags as DWORD,
-                        self.entry_mask,
-                        self.entry_sid,
-                        FALSE,
-                        FALSE,
-                    )
-                }
-            }
-            AceType::SystemMandatoryLabel => {
-                unsafe {
-                    AddMandatoryAce(
-                        self.new_acl.as_mut_ptr() as PACL,
-                        ACL_REVISION_DS as DWORD,
-                        self.entry_flags as DWORD,
-                        self.entry_mask,
-                        self.entry_sid,
-                    )
-                }
-            }
-            _ => 0
+            AceType::AccessAllow => unsafe {
+                AddAccessAllowedAceEx(
+                    self.new_acl.as_mut_ptr() as PACL,
+                    ACL_REVISION_DS as DWORD,
+                    self.entry_flags as DWORD,
+                    self.entry_mask,
+                    self.entry_sid,
+                )
+            },
+            AceType::AccessDeny => unsafe {
+                AddAccessDeniedAceEx(
+                    self.new_acl.as_mut_ptr() as PACL,
+                    ACL_REVISION_DS as DWORD,
+                    self.entry_flags as DWORD,
+                    self.entry_mask,
+                    self.entry_sid,
+                )
+            },
+            AceType::SystemAudit => unsafe {
+                AddAuditAccessAceEx(
+                    self.new_acl.as_mut_ptr() as PACL,
+                    ACL_REVISION_DS as DWORD,
+                    self.entry_flags as DWORD,
+                    self.entry_mask,
+                    self.entry_sid,
+                    FALSE,
+                    FALSE,
+                )
+            },
+            AceType::SystemMandatoryLabel => unsafe {
+                AddMandatoryAce(
+                    self.new_acl.as_mut_ptr() as PACL,
+                    ACL_REVISION_DS as DWORD,
+                    self.entry_flags as DWORD,
+                    self.entry_mask,
+                    self.entry_sid,
+                )
+            },
+            _ => 0,
         };
 
         status != 0
@@ -509,8 +535,9 @@ impl EntryCallback for AddEntryCallback {
         if !self.already_added {
             if (entry.flags & INHERITED_ACE) == 0 {
                 if let Some(sid) = entry.sid {
-                    if entry.entry_type == self.entry_type &&
-                        unsafe { EqualSid(sid.as_ptr() as PSID, self.entry_sid) } != 0 {
+                    if entry.entry_type == self.entry_type
+                        && unsafe { EqualSid(sid.as_ptr() as PSID, self.entry_sid) } != 0
+                    {
                         // NOTE(andy): We found an entry that matches the type and sid of the one we were going
                         //             to add (uninherited). Instead of adding the old one and the new one, we
                         //             replace the old entry with the new entry.
@@ -525,8 +552,9 @@ impl EntryCallback for AddEntryCallback {
                     }
                 }
 
-                if entry.entry_type == AceType::AccessAllow &&
-                    self.entry_type == AceType::AccessDeny {
+                if entry.entry_type == AceType::AccessAllow
+                    && self.entry_type == AceType::AccessDeny
+                {
                     // NOTE(andy): Assuming proper ordering, we just hit an uninherited access allowed ACE while
                     //             trying to add an access deny ACE. This implies that we just reached the end of
                     //             the deny ACEs. We should add the deny ACE here.
@@ -555,7 +583,8 @@ impl EntryCallback for AddEntryCallback {
                 hdr as LPVOID,
                 (*hdr).AceSize as DWORD,
             )
-        } == 0 {
+        } == 0
+        {
             return false;
         }
 
@@ -564,7 +593,12 @@ impl EntryCallback for AddEntryCallback {
 }
 
 impl RemoveEntryCallback {
-    fn new(old_acl: PACL, target: PSID, target_type: Option<AceType>, flags: Option<BYTE>) -> Option<RemoveEntryCallback> {
+    fn new(
+        old_acl: PACL,
+        target: PSID,
+        target_type: Option<AceType>,
+        flags: Option<BYTE>,
+    ) -> Option<RemoveEntryCallback> {
         let new_acl_size = acl_size(old_acl)? as usize;
 
         let mut obj = RemoveEntryCallback {
@@ -575,7 +609,14 @@ impl RemoveEntryCallback {
             new_acl: Vec::with_capacity(new_acl_size),
         };
 
-        if unsafe { InitializeAcl(obj.new_acl.as_mut_ptr() as PACL, new_acl_size as DWORD, ACL_REVISION_DS as DWORD) } == 0 {
+        if unsafe {
+            InitializeAcl(
+                obj.new_acl.as_mut_ptr() as PACL,
+                new_acl_size as DWORD,
+                ACL_REVISION_DS as DWORD,
+            )
+        } == 0
+        {
             return None;
         }
 
@@ -587,7 +628,7 @@ impl EntryCallback for RemoveEntryCallback {
     fn on_entry(&mut self, hdr: PACE_HEADER, entry: ACLEntry) -> bool {
         let pSid: PSID = match entry.sid {
             Some(ref sid) => sid.as_ptr() as PSID,
-            None => NULL as PSID
+            None => NULL as PSID,
         };
 
         if pSid == NULL {
@@ -627,12 +668,15 @@ impl EntryCallback for RemoveEntryCallback {
         }
 
         if unsafe {
-            AddAce(self.new_acl.as_mut_ptr() as PACL,
-                   ACL_REVISION_DS as DWORD,
-                   MAXDWORD,
-                   hdr as LPVOID,
-                   (*hdr).AceSize as DWORD)
-        } == 0 {
+            AddAce(
+                self.new_acl.as_mut_ptr() as PACL,
+                ACL_REVISION_DS as DWORD,
+                MAXDWORD,
+                hdr as LPVOID,
+                (*hdr).AceSize as DWORD,
+            )
+        } == 0
+        {
             return false;
         }
 
@@ -655,11 +699,15 @@ impl ACL {
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type.
-    pub fn from_path(path: &str, object_type: SE_OBJECT_TYPE, get_sacl: bool) -> Result<ACL, DWORD> {
+    pub fn from_path(
+        path: &str,
+        object_type: SE_OBJECT_TYPE,
+        get_sacl: bool,
+    ) -> Result<ACL, DWORD> {
         Ok(ACL {
             descriptor: match SecurityDescriptor::from_path(path, object_type, get_sacl) {
                 Ok(s) => Some(s),
-                Err(e) => return Err(e)
+                Err(e) => return Err(e),
             },
             path: path.to_owned(),
             include_sacl: get_sacl,
@@ -711,7 +759,11 @@ impl ACL {
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type.
-    pub fn from_registry_path(path: &str, is_wow6432key: bool, get_sacl: bool) -> Result<ACL, DWORD> {
+    pub fn from_registry_path(
+        path: &str,
+        is_wow6432key: bool,
+        get_sacl: bool,
+    ) -> Result<ACL, DWORD> {
         if is_wow6432key {
             ACL::from_path(path, SE_REGISTRY_WOW64_32KEY, get_sacl)
         } else {
@@ -727,7 +779,7 @@ impl ACL {
     /// Returns a `Vec<ACLEntry>` of access control list entries for the specified named object path.
     pub fn all(&self) -> Result<Vec<ACLEntry>, DWORD> {
         let mut callback = AllEntryCallback {
-            entries: Vec::new()
+            entries: Vec::new(),
         };
 
         if let Some(ref descriptor) = self.descriptor {
@@ -772,7 +824,9 @@ impl ACL {
     /// # Remarks
     /// This is invoked automatically after any add/remove entry operation.
     pub fn reload(&mut self) -> bool {
-        self.descriptor = SecurityDescriptor::from_path(&self.path, self.object_type().into(), self.include_sacl).ok();
+        self.descriptor =
+            SecurityDescriptor::from_path(&self.path, self.object_type().into(), self.include_sacl)
+                .ok();
 
         self.descriptor.is_some()
     }
@@ -791,7 +845,13 @@ impl ACL {
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
-    pub fn add_entry(&mut self, sid: PSID, entry_type: AceType, flags: BYTE, mask: DWORD) -> Result<bool, DWORD> {
+    pub fn add_entry(
+        &mut self,
+        sid: PSID,
+        entry_type: AceType,
+        flags: BYTE,
+        mask: DWORD,
+    ) -> Result<bool, DWORD> {
         let object_type = self.object_type();
         if let Some(ref mut descriptor) = self.descriptor {
             let mut is_dacl = false;
@@ -801,12 +861,16 @@ impl ACL {
                     descriptor.pDacl
                 }
                 AceType::SystemAudit | AceType::SystemMandatoryLabel => descriptor.pSacl,
-                _ => { return Err(0); }
+                _ => {
+                    return Err(0);
+                }
             };
 
             let mut add_callback = match AddEntryCallback::new(acl, sid, entry_type, flags, mask) {
                 Some(obj) => obj,
-                None => { return Err(unsafe { GetLastError() }); }
+                None => {
+                    return Err(unsafe { GetLastError() });
+                }
             };
 
             if acl != (NULL as PACL) && !enumerate_acl_entries(acl, &mut add_callback) {
@@ -852,12 +916,18 @@ impl ACL {
     ///
     /// # Errors
     /// On error, a Windows error code wrapped in a `Err` type.
-    pub fn remove_entry(&mut self, sid: PSID, entry_type: Option<AceType>, flags: Option<BYTE>) -> Result<usize, DWORD> {
+    pub fn remove_entry(
+        &mut self,
+        sid: PSID,
+        entry_type: Option<AceType>,
+        flags: Option<BYTE>,
+    ) -> Result<usize, DWORD> {
         let mut removed_entries = 0;
         let object_type = self.object_type().into();
 
         if let Some(ref mut descriptor) = self.descriptor {
-            let mut dacl_result: Option<RemoveEntryCallback> = if descriptor.pDacl != (NULL as PACL) {
+            let mut dacl_result: Option<RemoveEntryCallback> = if descriptor.pDacl != (NULL as PACL)
+            {
                 RemoveEntryCallback::new(descriptor.pDacl, sid, entry_type, flags)
             } else {
                 None
@@ -869,12 +939,18 @@ impl ACL {
                 }
                 removed_entries += dacl_callback.removed;
 
-                if !descriptor.apply(&self.path, object_type, Some(dacl_callback.new_acl.as_ptr() as PACL), None) {
+                if !descriptor.apply(
+                    &self.path,
+                    object_type,
+                    Some(dacl_callback.new_acl.as_ptr() as PACL),
+                    None,
+                ) {
                     return Err(unsafe { GetLastError() });
                 }
             }
 
-            let mut sacl_result: Option<RemoveEntryCallback> = if descriptor.pSacl != (NULL as PACL) {
+            let mut sacl_result: Option<RemoveEntryCallback> = if descriptor.pSacl != (NULL as PACL)
+            {
                 RemoveEntryCallback::new(descriptor.pSacl, sid, entry_type, flags)
             } else {
                 None
@@ -886,7 +962,12 @@ impl ACL {
                 }
                 removed_entries += sacl_callback.removed;
 
-                if !descriptor.apply(&self.path, object_type, None, Some(sacl_callback.new_acl.as_ptr() as PACL)) {
+                if !descriptor.apply(
+                    &self.path,
+                    object_type,
+                    None,
+                    Some(sacl_callback.new_acl.as_ptr() as PACL),
+                ) {
                     return Err(unsafe { GetLastError() });
                 }
             }
@@ -955,7 +1036,14 @@ impl ACL {
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
-    pub fn audit(&mut self, sid: PSID, inheritable: bool, mask: DWORD, audit_success: bool, audit_fails: bool) -> Result<bool, DWORD> {
+    pub fn audit(
+        &mut self,
+        sid: PSID,
+        inheritable: bool,
+        mask: DWORD,
+        audit_success: bool,
+        audit_fails: bool,
+    ) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
         if inheritable {
@@ -985,7 +1073,12 @@ impl ACL {
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type. If the error code is 0, the provided `entry_type` is invalid.
-    pub fn integrity_level(&mut self, label_sid: PSID, inheritable: bool, policy: DWORD) -> Result<bool, DWORD> {
+    pub fn integrity_level(
+        &mut self,
+        label_sid: PSID,
+        inheritable: bool,
+        policy: DWORD,
+    ) -> Result<bool, DWORD> {
         let mut flags: BYTE = 0;
 
         if inheritable {
@@ -1006,7 +1099,12 @@ impl ACL {
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type.
-    pub fn remove(&mut self, sid: PSID, entry_type: Option<AceType>, inheritable: Option<bool>) -> Result<usize, DWORD> {
+    pub fn remove(
+        &mut self,
+        sid: PSID,
+        entry_type: Option<AceType>,
+        inheritable: Option<bool>,
+    ) -> Result<usize, DWORD> {
         let mut flags: Option<BYTE> = None;
         if let Some(inherit) = inheritable {
             if inherit {
