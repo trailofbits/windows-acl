@@ -6,13 +6,15 @@ Rust library to simplify Windows ACL operations.
 
 ## Using windows-acl
 First, add the following line to the dependencies section of the project’s `Cargo.toml` file.
-<pre>
+
+```
 winapi = “0.3.5”
 windows-acl = “0.1.0”
-</pre>
+```
 
 In the main Rust source code file, add the _windows-acl_ external crate and import the symbols as follows:
-<pre>
+
+```rust
 extern crate winapi;
 extern crate windows_acl;
 
@@ -22,12 +24,13 @@ use winapi::um::winnt::{
     SYSTEM_MANDATORY_LABEL_NO_READ_UP, SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP
 };
 use windows_acl::acl::ACL;
-</pre>
+```
 
 **NOTE:** Altering system ACL entries require either Administrator privileges or the ability to acquire the `SeSecurityPrivilege` privilege.
 
 ### Adding a mandatory integrity label
-<pre>
+
+```rust
     let high_integrity_level_sid = string_to_sid("S-1-16-12288").unwrap();
 
     let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\high_il", true).unwrap();
@@ -49,10 +52,11 @@ use windows_acl::acl::ACL;
             println!("Failed to add high integrity level to high_il: error={}", code);
         }
     }
-</pre>
+```
 
 ### Adding an audit entry
-<pre>
+
+```rust
     let world_sid = string_to_sid("S-1-1-0").unwrap();
 
     let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\sensitive_files", true).unwrap();
@@ -74,10 +78,11 @@ use windows_acl::acl::ACL;
             println!("Failed to add audit entry to sensitive_files: error={}", code);
         }
     }
-</pre>
+```
 
 ### Denying guest access to a directory
-<pre>
+
+```rust
     let guests = string_to_sid("S-1-5-32-546").unwrap();
 
     let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\sensitive_files", false).unwrap();
@@ -93,10 +98,11 @@ use windows_acl::acl::ACL;
             println!("Failed to add deny entry: error={}", code);
         }
     }
-</pre>
+```
 
 ### Removing entries
-<pre>
+
+```rust
     let world_sid = string_to_sid("S-1-1-0").unwrap();
 
     let mut acl = ACL::from_file_path("C:\\Users\\andy\\work\\sensitive_files", true).unwrap();
@@ -110,7 +116,7 @@ use windows_acl::acl::ACL;
             println!("Failed to remove entry: error={}", code);
         }
     }
-</pre>
+```
 
 ## Example Applications
 See `query_acl.rs` in the `example/` directory.
