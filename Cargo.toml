@@ -16,7 +16,7 @@ name = "windows_acl"
 path = "src/lib.rs"
 
 [dependencies]
-field-offset = "0.1.1"
+field-offset = "0.3.0"
 libc = "0.2.40"
 widestring = "0.3.0"
 
