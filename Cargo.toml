@@ -11,6 +11,9 @@ keywords = ["windows", "acl", "security", "win32"]
 categories = ["os", "os::windows-apis"]
 license-file = "LICENSE"
 
+[package.metadata.release]
+no-dev-version = true
+
 [lib]
 name = "windows_acl"
 path = "src/lib.rs"
