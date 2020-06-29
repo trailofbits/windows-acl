@@ -926,8 +926,7 @@ impl ACL {
         let object_type = self.object_type().into();
 
         if let Some(ref mut descriptor) = self.descriptor {
-            let dacl_result: Option<RemoveEntryCallback> = if descriptor.pDacl != (NULL as PACL)
-            {
+            let dacl_result: Option<RemoveEntryCallback> = if descriptor.pDacl != (NULL as PACL) {
                 RemoveEntryCallback::new(descriptor.pDacl, sid, entry_type, flags)
             } else {
                 None
@@ -949,8 +948,7 @@ impl ACL {
                 }
             }
 
-            let sacl_result: Option<RemoveEntryCallback> = if descriptor.pSacl != (NULL as PACL)
-            {
+            let sacl_result: Option<RemoveEntryCallback> = if descriptor.pSacl != (NULL as PACL) {
                 RemoveEntryCallback::new(descriptor.pSacl, sid, entry_type, flags)
             } else {
                 None
