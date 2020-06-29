@@ -1,6 +1,7 @@
 # windows-acl
 
 [![Build Status](https://img.shields.io/github/workflow/status/trailofbits/windows-acl/CI/master)](https://github.com/trailofbits/windows-acl/actions?query=workflow%3ACI)
+[![Crates.io](https://img.shields.io/crates/v/windows-acl)](https://crates.io/crates/windows-acl)
 
 Rust library to simplify Windows ACL operations.
 
