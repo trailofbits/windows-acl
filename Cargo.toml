@@ -13,6 +13,7 @@ license-file = "LICENSE"
 
 [package.metadata.release]
 no-dev-version = true
+disable-publish = true # handled by GitHub Actions
 
 [lib]
 name = "windows_acl"
