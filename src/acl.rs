@@ -7,9 +7,9 @@ use field_offset::*;
 
 use std::fmt;
 use std::mem;
-use utils::{sid_to_string, SecurityDescriptor};
+use utils::{sid_to_string, SecurityDescriptor, SDSource};
 use winapi::shared::minwindef::{BYTE, DWORD, FALSE, LPVOID, WORD};
-use winapi::shared::ntdef::NULL;
+use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um::accctrl::{
     SE_DS_OBJECT, SE_DS_OBJECT_ALL, SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_LMSHARE, SE_OBJECT_TYPE,
     SE_PRINTER, SE_PROVIDER_DEFINED_OBJECT, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY, SE_SERVICE,
@@ -144,11 +144,26 @@ pub struct ACLEntry {
     pub string_sid: String,
 }
 
+#[derive(Debug)]
+enum ACLSource {
+    Path(String),
+    Handle(HANDLE)
+}
+
+impl ACLSource {
+    fn to_sd_source(&self) -> SDSource {
+        match self {
+            ACLSource::Handle(handle) => SDSource::Handle(*handle),
+            ACLSource::Path(path) => SDSource::Path(path)
+        }
+    }
+}
+
 /// `ACL` represents the access control list (discretionary or oth discretionary/system) for a named object
 #[derive(Debug)]
 pub struct ACL {
     descriptor: Option<SecurityDescriptor>,
-    path: String,
+    source: ACLSource,
     include_sacl: bool,
     object_type: ObjectType,
 }
@@ -685,6 +700,92 @@ impl EntryCallback for RemoveEntryCallback {
 }
 
 impl ACL {
+    /// Creates an `ACL` object from a specified object handle.
+    ///
+    /// # Arguments
+    /// * `handle` - An object handle.
+    /// * `object_type` - The named object path's type. See [SE_OBJECT_TYPE](https://docs.microsoft.com/en-us/windows/desktop/api/accctrl/ne-accctrl-_se_object_type).
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// For file, kernel object, and registry paths, it is better to use the simpler `from_file_handle`,
+    /// `from_object_handle`, and `from_registry_handle` APIs.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
+    pub fn from_handle(
+        handle: HANDLE,
+        object_type: SE_OBJECT_TYPE,
+        get_sacl: bool,
+    ) -> Result<ACL, DWORD> {
+        Ok(ACL {
+            descriptor: match SecurityDescriptor::from_source(SDSource::Handle(handle), object_type, get_sacl) {
+                Ok(s) => Some(s),
+                Err(e) => return Err(e),
+            },
+            source: ACLSource::Handle(handle),
+            include_sacl: get_sacl,
+            object_type: object_type.into(),
+        })
+    }
+
+    /// Creates an `ACL` object from a specified file handle.
+    ///
+    /// # Arguments
+    /// * `handle` - A file handle.
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// This function is a wrapper for `from_path`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
+    pub fn from_file_handle(handle: HANDLE, get_sacl: bool) -> Result<ACL, DWORD> {
+        ACL::from_handle(handle, SE_FILE_OBJECT, get_sacl)
+    }
+
+    /// Creates an `ACL` object from a specified kernel object handle.
+    ///
+    /// # Arguments
+    /// * `handle` - A kernel object handle.
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// This function is a wrapper for `from_path`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
+    pub fn from_object_handle(handle: HANDLE, get_sacl: bool) -> Result<ACL, DWORD> {
+        ACL::from_handle(handle, SE_KERNEL_OBJECT, get_sacl)
+    }
+
+    /// Creates an `ACL` object from a specified registry handle.
+    ///
+    /// # Arguments
+    /// * `handle` - A registry key handle.
+    /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
+    ///                System ACL entries.
+    ///
+    /// # Remarks
+    /// This function is a wrapper for `from_path`.
+    ///
+    /// # Errors
+    /// On error, a Windows error code is wrapped in an `Err` type.
+    pub fn from_registry_handle(
+        handle: HANDLE,
+        is_wow6432key: bool,
+        get_sacl: bool,
+    ) -> Result<ACL, DWORD> {
+        if is_wow6432key {
+            ACL::from_handle(handle, SE_REGISTRY_WOW64_32KEY, get_sacl)
+        } else {
+            ACL::from_handle(handle, SE_REGISTRY_KEY, get_sacl)
+        }
+    }
+
     /// Creates an `ACL` object from a specified named object path.
     ///
     /// # Arguments
@@ -705,11 +806,11 @@ impl ACL {
         get_sacl: bool,
     ) -> Result<ACL, DWORD> {
         Ok(ACL {
-            descriptor: match SecurityDescriptor::from_path(path, object_type, get_sacl) {
+            descriptor: match SecurityDescriptor::from_source(SDSource::Path(path), object_type, get_sacl) {
                 Ok(s) => Some(s),
                 Err(e) => return Err(e),
             },
-            path: path.to_owned(),
+            source: ACLSource::Path(path.to_owned()),
             include_sacl: get_sacl,
             object_type: object_type.into(),
         })
@@ -825,7 +926,7 @@ impl ACL {
     /// This is invoked automatically after any add/remove entry operation.
     pub fn reload(&mut self) -> bool {
         self.descriptor =
-            SecurityDescriptor::from_path(&self.path, self.object_type().into(), self.include_sacl)
+            SecurityDescriptor::from_source(self.source.to_sd_source(), self.object_type().into(), self.include_sacl)
                 .ok();
 
         self.descriptor.is_some()
@@ -887,9 +988,9 @@ impl ACL {
 
             let status: bool;
             if is_dacl {
-                status = descriptor.apply(&self.path, object_type.into(), Some(new_acl), None);
+                status = descriptor.apply(self.source.to_sd_source(), object_type.into(), Some(new_acl), None);
             } else {
-                status = descriptor.apply(&self.path, object_type.into(), None, Some(new_acl));
+                status = descriptor.apply(self.source.to_sd_source(), object_type.into(), None, Some(new_acl));
             }
 
             if !status {
@@ -939,7 +1040,7 @@ impl ACL {
                 removed_entries += dacl_callback.removed;
 
                 if !descriptor.apply(
-                    &self.path,
+                    self.source.to_sd_source(),
                     object_type,
                     Some(dacl_callback.new_acl.as_ptr() as PACL),
                     None,
@@ -961,7 +1062,7 @@ impl ACL {
                 removed_entries += sacl_callback.removed;
 
                 if !descriptor.apply(
-                    &self.path,
+                    self.source.to_sd_source(),
                     object_type,
                     None,
                     Some(sacl_callback.new_acl.as_ptr() as PACL),

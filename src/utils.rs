@@ -19,7 +19,7 @@ use winapi::um::accctrl::{
     SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
     SE_SERVICE,
 };
-use winapi::um::aclapi::{GetNamedSecurityInfoW, SetNamedSecurityInfoW};
+use winapi::um::aclapi::{GetSecurityInfo, GetNamedSecurityInfoW, SetSecurityInfo, SetNamedSecurityInfoW};
 use winapi::um::errhandlingapi::{GetLastError, SetLastError};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
@@ -230,6 +230,12 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
 }
 
 #[derive(Debug)]
+pub enum SDSource<'a> {
+    Path(&'a str),
+    Handle(HANDLE)
+}
+
+#[derive(Debug)]
 struct SystemPrivilege {
     name: Option<String>,
 }
@@ -274,22 +280,21 @@ pub struct SecurityDescriptor {
 }
 
 impl SecurityDescriptor {
-    /// Returns a `SecurityDescriptor` object for the specified named object path.
+    /// Returns a `SecurityDescriptor` object for the specified object source.
     ///
     /// # Arguments
-    /// * `path` - A string containing the named object path.
+    /// * `source` - An object handle or a string containing the named object path.
     /// * `obj_type` - The named object path's type. See [SE_OBJECT_TYPE](https://docs.microsoft.com/en-us/windows/desktop/api/accctrl/ne-accctrl-_se_object_type).
     /// * `get_sacl` - A boolean specifying whether the returned `ACL` object will be able to enumerate and set
     ///                System ACL entries.
     ///
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type
-    pub fn from_path(
-        path: &str,
+    pub fn from_source(
+        source: SDSource,
         obj_type: SE_OBJECT_TYPE,
         get_sacl: bool,
     ) -> Result<SecurityDescriptor, DWORD> {
-        let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
 
         let mut obj = SecurityDescriptor::default();
         let mut flags =
@@ -306,18 +311,38 @@ impl SecurityDescriptor {
             flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
 
-        let ret = unsafe {
-            GetNamedSecurityInfoW(
-                wPath.as_ptr(),
-                obj_type,
-                flags,
-                &mut obj.psidOwner,
-                &mut obj.psidGroup,
-                &mut obj.pDacl,
-                &mut obj.pSacl,
-                &mut obj.pSecurityDescriptor,
-            )
+        let ret = match source {
+            SDSource::Handle(handle) => {
+                unsafe {
+                    GetSecurityInfo(
+                        handle,
+                        obj_type,
+                        flags,
+                        &mut obj.psidOwner,
+                        &mut obj.psidGroup,
+                        &mut obj.pDacl,
+                        &mut obj.pSacl,
+                        &mut obj.pSecurityDescriptor,
+                    )
+                }
+            }
+            SDSource::Path(path) => {
+                let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
+                unsafe {
+                    GetNamedSecurityInfoW(
+                        wPath.as_ptr(),
+                        obj_type,
+                        flags,
+                        &mut obj.psidOwner,
+                        &mut obj.psidGroup,
+                        &mut obj.pDacl,
+                        &mut obj.pSacl,
+                        &mut obj.pSecurityDescriptor,
+                    )
+                }
+            },
         };
+
         if ret != ERROR_SUCCESS {
             unsafe { SetLastError(ret) };
             return Err(ret);
@@ -356,12 +381,11 @@ impl SecurityDescriptor {
     /// On error, `false` is returned.
     pub fn apply(
         &mut self,
-        path: &str,
+        source: SDSource,
         obj_type: SE_OBJECT_TYPE,
         dacl: Option<PACL>,
         sacl: Option<PACL>,
     ) -> bool {
-        let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
         let dacl_ptr = dacl.unwrap_or(NULL as PACL);
         let sacl_ptr = sacl.unwrap_or(NULL as PACL);
 
@@ -381,17 +405,36 @@ impl SecurityDescriptor {
             flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
 
-        let ret = unsafe {
-            SetNamedSecurityInfoW(
-                wPath.as_mut_ptr(),
-                obj_type,
-                flags,
-                NULL as PSID,
-                NULL as PSID,
-                dacl_ptr,
-                sacl_ptr,
-            )
+        let ret = match source {
+            SDSource::Handle(handle) => {
+                unsafe {
+                    SetSecurityInfo(
+                        handle,
+                        obj_type,
+                        flags,
+                        NULL as PSID,
+                        NULL as PSID,
+                        dacl_ptr,
+                        sacl_ptr,
+                    )
+                }
+            }
+            SDSource::Path(path) => {
+                let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
+                unsafe {
+                    SetNamedSecurityInfoW(
+                        wPath.as_mut_ptr(),
+                        obj_type,
+                        flags,
+                        NULL as PSID,
+                        NULL as PSID,
+                        dacl_ptr,
+                        sacl_ptr,
+                    )
+                }
+            }
         };
+
         if ret != ERROR_SUCCESS {
             unsafe { SetLastError(ret) };
             return false;
