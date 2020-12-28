@@ -5,7 +5,7 @@ use std::env::current_exe;
 use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Once, ONCE_INIT};
+use std::sync::{Once};
 use utils::{current_user, name_to_sid, sid_to_string, string_to_sid};
 use winapi::shared::winerror::ERROR_NOT_ALL_ASSIGNED;
 use winapi::um::winnt::{
@@ -15,7 +15,7 @@ use winapi::um::winnt::{
     SYSTEM_MANDATORY_LABEL_NO_WRITE_UP,
 };
 
-static START: Once = ONCE_INIT;
+static START: Once = Once::new();
 
 fn support_path() -> Option<PathBuf> {
     if let Ok(mut path) = current_exe() {
