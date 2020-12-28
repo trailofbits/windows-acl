@@ -144,26 +144,11 @@ pub struct ACLEntry {
     pub string_sid: String,
 }
 
-#[derive(Debug)]
-enum ACLSource {
-    Path(String),
-    Handle(HANDLE)
-}
-
-impl ACLSource {
-    fn to_sd_source(&self) -> SDSource {
-        match self {
-            ACLSource::Handle(handle) => SDSource::Handle(*handle),
-            ACLSource::Path(path) => SDSource::Path(path)
-        }
-    }
-}
-
 /// `ACL` represents the access control list (discretionary or oth discretionary/system) for a named object
 #[derive(Debug)]
 pub struct ACL {
     descriptor: Option<SecurityDescriptor>,
-    source: ACLSource,
+    source: SDSource,
     include_sacl: bool,
     object_type: ObjectType,
 }
@@ -719,12 +704,13 @@ impl ACL {
         object_type: SE_OBJECT_TYPE,
         get_sacl: bool,
     ) -> Result<ACL, DWORD> {
+        let source = SDSource::Handle(handle);
         Ok(ACL {
-            descriptor: match SecurityDescriptor::from_source(SDSource::Handle(handle), object_type, get_sacl) {
+            descriptor: match SecurityDescriptor::from_source(&source, object_type, get_sacl) {
                 Ok(s) => Some(s),
                 Err(e) => return Err(e),
             },
-            source: ACLSource::Handle(handle),
+            source,
             include_sacl: get_sacl,
             object_type: object_type.into(),
         })
@@ -805,12 +791,13 @@ impl ACL {
         object_type: SE_OBJECT_TYPE,
         get_sacl: bool,
     ) -> Result<ACL, DWORD> {
+        let source = SDSource::Path(path.to_owned());
         Ok(ACL {
-            descriptor: match SecurityDescriptor::from_source(SDSource::Path(path), object_type, get_sacl) {
+            descriptor: match SecurityDescriptor::from_source(&source, object_type, get_sacl) {
                 Ok(s) => Some(s),
                 Err(e) => return Err(e),
             },
-            source: ACLSource::Path(path.to_owned()),
+            source,
             include_sacl: get_sacl,
             object_type: object_type.into(),
         })
@@ -926,7 +913,7 @@ impl ACL {
     /// This is invoked automatically after any add/remove entry operation.
     pub fn reload(&mut self) -> bool {
         self.descriptor =
-            SecurityDescriptor::from_source(self.source.to_sd_source(), self.object_type().into(), self.include_sacl)
+            SecurityDescriptor::from_source(&self.source, self.object_type().into(), self.include_sacl)
                 .ok();
 
         self.descriptor.is_some()
@@ -988,9 +975,9 @@ impl ACL {
 
             let status: bool;
             if is_dacl {
-                status = descriptor.apply(self.source.to_sd_source(), object_type.into(), Some(new_acl), None);
+                status = descriptor.apply(&self.source, object_type.into(), Some(new_acl), None);
             } else {
-                status = descriptor.apply(self.source.to_sd_source(), object_type.into(), None, Some(new_acl));
+                status = descriptor.apply(&self.source, object_type.into(), None, Some(new_acl));
             }
 
             if !status {
@@ -1040,7 +1027,7 @@ impl ACL {
                 removed_entries += dacl_callback.removed;
 
                 if !descriptor.apply(
-                    self.source.to_sd_source(),
+                    &self.source,
                     object_type,
                     Some(dacl_callback.new_acl.as_ptr() as PACL),
                     None,
@@ -1062,7 +1049,7 @@ impl ACL {
                 removed_entries += sacl_callback.removed;
 
                 if !descriptor.apply(
-                    self.source.to_sd_source(),
+                    &self.source,
                     object_type,
                     None,
                     Some(sacl_callback.new_acl.as_ptr() as PACL),

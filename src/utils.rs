@@ -230,8 +230,8 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
 }
 
 #[derive(Debug)]
-pub enum SDSource<'a> {
-    Path(&'a str),
+pub enum SDSource {
+    Path(String),
     Handle(HANDLE)
 }
 
@@ -291,7 +291,7 @@ impl SecurityDescriptor {
     /// # Errors
     /// On error, a Windows error code is wrapped in an `Err` type
     pub fn from_source(
-        source: SDSource,
+        source: &SDSource,
         obj_type: SE_OBJECT_TYPE,
         get_sacl: bool,
     ) -> Result<SecurityDescriptor, DWORD> {
@@ -311,7 +311,7 @@ impl SecurityDescriptor {
             flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
 
-        let ret = match source {
+        let ret = match *source {
             SDSource::Handle(handle) => {
                 unsafe {
                     GetSecurityInfo(
@@ -326,7 +326,7 @@ impl SecurityDescriptor {
                     )
                 }
             }
-            SDSource::Path(path) => {
+            SDSource::Path(ref path) => {
                 let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
                 unsafe {
                     GetNamedSecurityInfoW(
@@ -381,7 +381,7 @@ impl SecurityDescriptor {
     /// On error, `false` is returned.
     pub fn apply(
         &mut self,
-        source: SDSource,
+        source: &SDSource,
         obj_type: SE_OBJECT_TYPE,
         dacl: Option<PACL>,
         sacl: Option<PACL>,
@@ -405,7 +405,7 @@ impl SecurityDescriptor {
             flags |= SACL_SECURITY_INFORMATION | LABEL_SECURITY_INFORMATION;
         }
 
-        let ret = match source {
+        let ret = match *source {
             SDSource::Handle(handle) => {
                 unsafe {
                     SetSecurityInfo(
@@ -419,7 +419,7 @@ impl SecurityDescriptor {
                     )
                 }
             }
-            SDSource::Path(path) => {
+            SDSource::Path(ref path) => {
                 let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
                 unsafe {
                     SetNamedSecurityInfoW(
