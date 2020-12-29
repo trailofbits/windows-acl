@@ -27,3 +27,7 @@ widestring = "0.4.0"
 [dependencies.winapi]
 version = "0.3.5"
 features = ["aclapi", "errhandlingapi", "handleapi", "sddl", "securitybaseapi", "winbase", "winerror"]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-pc-windows-msvc", "i686-pc-windows-msvc"]
