@@ -56,6 +56,7 @@ $processHandle = (Get-Process -id $PID).Handle
     
 $type = Add-Type $definition -PassThru
 $null = $type[0]::EnablePrivilege($processHandle, "SeSecurityPrivilege", $false)
+$null = $type[0]::EnablePrivilege($processHandle, "SeTakeOwnershipPrivilege", $false)
 
 # Setup supportPath
 $supportPath = Split-Path $SCRIPT:MyInvocation.MyCommand.Path -Parent
