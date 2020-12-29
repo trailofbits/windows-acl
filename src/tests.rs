@@ -3,20 +3,19 @@
 use acl::{ACLEntry, AceType, ACL};
 use std::env::current_exe;
 use std::fs::{File, OpenOptions};
-use std::os::windows::io::AsRawHandle;
 use std::os::windows::fs::OpenOptionsExt;
+use std::os::windows::io::AsRawHandle;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Once};
+use std::sync::Once;
 use utils::{current_user, name_to_sid, sid_to_string, string_to_sid};
 use winapi::ctypes::c_void;
 use winapi::shared::winerror::ERROR_NOT_ALL_ASSIGNED;
 use winapi::um::winnt::{
-    GENERIC_WRITE, GENERIC_READ,
     FAILED_ACCESS_ACE_FLAG, FILE_ALL_ACCESS, FILE_GENERIC_EXECUTE, FILE_GENERIC_READ,
-    FILE_GENERIC_WRITE, PSID, SUCCESSFUL_ACCESS_ACE_FLAG, SYNCHRONIZE,
+    FILE_GENERIC_WRITE, GENERIC_READ, GENERIC_WRITE, PSID, SUCCESSFUL_ACCESS_ACE_FLAG, SYNCHRONIZE,
     SYSTEM_MANDATORY_LABEL_NO_EXECUTE_UP, SYSTEM_MANDATORY_LABEL_NO_READ_UP,
-    SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, WRITE_DAC
+    SYSTEM_MANDATORY_LABEL_NO_WRITE_UP, WRITE_DAC,
 };
 
 static START: Once = Once::new();
@@ -253,7 +252,11 @@ fn add_and_remove_dacl_allow(use_handle: bool) {
     };
 
     let mut path_obj = support_path().unwrap_or(PathBuf::new());
-    path_obj.push(if use_handle { "dacl_allow_handle" } else { "dacl_allow_file" });
+    path_obj.push(if use_handle {
+        "dacl_allow_handle"
+    } else {
+        "dacl_allow_file"
+    });
     assert!(path_obj.exists());
 
     let path = path_obj.to_str().unwrap_or("");
@@ -268,7 +271,8 @@ fn add_and_remove_dacl_allow(use_handle: bool) {
     let acl_result = if use_handle {
         file = OpenOptions::new()
             .access_mode(GENERIC_READ | WRITE_DAC)
-            .open(path).unwrap();
+            .open(path)
+            .unwrap();
         ACL::from_file_handle(file.as_raw_handle() as *mut c_void, false)
     } else {
         ACL::from_file_path(path, false)
@@ -371,7 +375,11 @@ fn add_and_remove_dacl_deny(use_handle: bool) {
     };
 
     let mut path_obj = support_path().unwrap_or(PathBuf::new());
-    path_obj.push(if use_handle { "dacl_deny_handle" } else { "dacl_deny_file" });
+    path_obj.push(if use_handle {
+        "dacl_deny_handle"
+    } else {
+        "dacl_deny_file"
+    });
     assert!(path_obj.exists());
 
     let path = path_obj.to_str().unwrap_or("");
@@ -381,8 +389,8 @@ fn add_and_remove_dacl_deny(use_handle: bool) {
     //             that the path exists (see line 375), this will attempt to open for write, which
     //             should succeed
     let create_res = OpenOptions::new()
-    .access_mode(GENERIC_WRITE | WRITE_DAC)
-    .open(path);
+        .access_mode(GENERIC_WRITE | WRITE_DAC)
+        .open(path);
     assert!(create_res.is_ok());
     let file = create_res.unwrap();
 

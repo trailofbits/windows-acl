@@ -19,7 +19,9 @@ use winapi::um::accctrl::{
     SE_FILE_OBJECT, SE_KERNEL_OBJECT, SE_OBJECT_TYPE, SE_REGISTRY_KEY, SE_REGISTRY_WOW64_32KEY,
     SE_SERVICE,
 };
-use winapi::um::aclapi::{GetSecurityInfo, GetNamedSecurityInfoW, SetSecurityInfo, SetNamedSecurityInfoW};
+use winapi::um::aclapi::{
+    GetNamedSecurityInfoW, GetSecurityInfo, SetNamedSecurityInfoW, SetSecurityInfo,
+};
 use winapi::um::errhandlingapi::{GetLastError, SetLastError};
 use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
@@ -232,7 +234,7 @@ fn set_privilege(name: &str, is_enabled: bool) -> Result<bool, DWORD> {
 #[derive(Debug)]
 pub enum SDSource {
     Path(String),
-    Handle(HANDLE)
+    Handle(HANDLE),
 }
 
 #[derive(Debug)]
@@ -295,7 +297,6 @@ impl SecurityDescriptor {
         obj_type: SE_OBJECT_TYPE,
         get_sacl: bool,
     ) -> Result<SecurityDescriptor, DWORD> {
-
         let mut obj = SecurityDescriptor::default();
         let mut flags =
             DACL_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION;
@@ -312,20 +313,18 @@ impl SecurityDescriptor {
         }
 
         let ret = match *source {
-            SDSource::Handle(handle) => {
-                unsafe {
-                    GetSecurityInfo(
-                        handle,
-                        obj_type,
-                        flags,
-                        &mut obj.psidOwner,
-                        &mut obj.psidGroup,
-                        &mut obj.pDacl,
-                        &mut obj.pSacl,
-                        &mut obj.pSecurityDescriptor,
-                    )
-                }
-            }
+            SDSource::Handle(handle) => unsafe {
+                GetSecurityInfo(
+                    handle,
+                    obj_type,
+                    flags,
+                    &mut obj.psidOwner,
+                    &mut obj.psidGroup,
+                    &mut obj.pDacl,
+                    &mut obj.pSacl,
+                    &mut obj.pSecurityDescriptor,
+                )
+            },
             SDSource::Path(ref path) => {
                 let wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
                 unsafe {
@@ -340,7 +339,7 @@ impl SecurityDescriptor {
                         &mut obj.pSecurityDescriptor,
                     )
                 }
-            },
+            }
         };
 
         if ret != ERROR_SUCCESS {
@@ -406,19 +405,17 @@ impl SecurityDescriptor {
         }
 
         let ret = match *source {
-            SDSource::Handle(handle) => {
-                unsafe {
-                    SetSecurityInfo(
-                        handle,
-                        obj_type,
-                        flags,
-                        NULL as PSID,
-                        NULL as PSID,
-                        dacl_ptr,
-                        sacl_ptr,
-                    )
-                }
-            }
+            SDSource::Handle(handle) => unsafe {
+                SetSecurityInfo(
+                    handle,
+                    obj_type,
+                    flags,
+                    NULL as PSID,
+                    NULL as PSID,
+                    dacl_ptr,
+                    sacl_ptr,
+                )
+            },
             SDSource::Path(ref path) => {
                 let mut wPath: Vec<u16> = OsStr::new(path).encode_wide().chain(once(0)).collect();
                 unsafe {

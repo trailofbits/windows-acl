@@ -7,7 +7,7 @@ use field_offset::*;
 
 use std::fmt;
 use std::mem;
-use utils::{sid_to_string, SecurityDescriptor, SDSource};
+use utils::{sid_to_string, SDSource, SecurityDescriptor};
 use winapi::shared::minwindef::{BYTE, DWORD, FALSE, LPVOID, WORD};
 use winapi::shared::ntdef::{HANDLE, NULL};
 use winapi::um::accctrl::{
@@ -912,9 +912,12 @@ impl ACL {
     /// # Remarks
     /// This is invoked automatically after any add/remove entry operation.
     pub fn reload(&mut self) -> bool {
-        self.descriptor =
-            SecurityDescriptor::from_source(&self.source, self.object_type().into(), self.include_sacl)
-                .ok();
+        self.descriptor = SecurityDescriptor::from_source(
+            &self.source,
+            self.object_type().into(),
+            self.include_sacl,
+        )
+        .ok();
 
         self.descriptor.is_some()
     }
