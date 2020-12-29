@@ -73,7 +73,9 @@ $testDirs = @(
 
 $testFiles = @(
     "dacl_deny_file",
+    "dacl_deny_handle",
     "dacl_allow_file",
+    "dacl_allow_handle",
     "sacl_audit_file",
     "sacl_mil_file",
     "acl_get_and_remove"
@@ -146,11 +148,31 @@ $acl = Get-Acl -Path $queryPath
 $null = $acl.SetAccessRule($userRule)
 $acl | Set-Acl -Path $queryPath
 
+# Setup dacl_deny_handle
+$queryPath = Join-Path -Path $supportPath -ChildPath "dacl_deny_handle"
+ResetDaclEntries -Path $queryPath
+
+$userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read, Write, ChangePermissions", "Allow"
+
+$acl = Get-Acl -Path $queryPath
+$null = $acl.SetAccessRule($userRule)
+$acl | Set-Acl -Path $queryPath
+
 # Setup dacl_allow_file
 $queryPath = Join-Path -Path $supportPath -ChildPath "dacl_allow_file"
 ResetDaclEntries -Path $queryPath
 
 $userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read", "Allow"
+
+$acl = Get-Acl -Path $queryPath
+$null = $acl.SetAccessRule($userRule)
+$acl | Set-Acl -Path $queryPath
+
+# Setup dacl_allow_handle
+$queryPath = Join-Path -Path $supportPath -ChildPath "dacl_allow_handle"
+ResetDaclEntries -Path $queryPath
+
+$userRule = New-Object System.Security.AccessControl.FileSystemAccessRule $currentUser, "Read, ChangePermissions", "Allow"
 
 $acl = Get-Acl -Path $queryPath
 $null = $acl.SetAccessRule($userRule)
