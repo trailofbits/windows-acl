@@ -10,7 +10,7 @@ First, add the following line to the dependencies section of the project’s `Ca
 
 ```
 winapi = “0.3.5”
-windows-acl = “0.1.0”
+windows-acl = “0.3.0”
 ```
 
 In the main Rust source code file, add the _windows-acl_ external crate and import the symbols as follows:
