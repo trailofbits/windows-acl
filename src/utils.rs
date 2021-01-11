@@ -123,6 +123,8 @@ pub fn name_to_sid(name: &str, system: Option<&str>) -> Result<Vec<BYTE>, DWORD>
         return Err(unsafe { GetLastError() });
     }
 
+    unsafe { sid.set_len(sid_size) };
+
     Ok(sid)
 }
 
