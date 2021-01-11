@@ -1,6 +1,6 @@
 [package]
 name = "windows-acl"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["William Woodruff <william@trailofbits.com>", "yying <contact@trailofbits.com>"]
 description = "Rust crate to simplify Windows ACL operations"
 documentation = "https://trailofbits.github.io/windows-acl"
