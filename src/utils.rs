@@ -153,6 +153,8 @@ pub fn string_to_sid(string_sid: &str) -> Result<Vec<BYTE>, DWORD> {
         return Err(unsafe { GetLastError() });
     }
 
+    unsafe { sid_buf.set_len(size as usize) };
+
     Ok(sid_buf)
 }
 
