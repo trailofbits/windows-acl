@@ -73,7 +73,7 @@ fn run_ps_script(file_name: &str) -> bool {
 
 fn string_sid_by_user(user: &str) -> String {
     let user_sid = name_to_sid(user, None).unwrap_or(Vec::new());
-    assert_ne!(user_sid.capacity(), 0);
+    assert_ne!(user_sid.len(), 0);
 
     let user_string_sid = sid_to_string(user_sid.as_ptr() as PSID).unwrap_or(String::from(""));
     assert_ne!(user_string_sid.len(), 0);
@@ -94,7 +94,7 @@ fn lookupname_unit_test() {
     let world_string_sid = "S-1-1-0";
 
     let raw_world_sid = name_to_sid(world_name, None).unwrap_or(Vec::new());
-    assert_ne!(raw_world_sid.capacity(), 0);
+    assert_ne!(raw_world_sid.len(), 0);
 
     let sid_string = sid_to_string(raw_world_sid.as_ptr() as PSID).unwrap_or(String::from(""));
     assert_ne!(sid_string.len(), 0);
@@ -107,7 +107,7 @@ fn sidstring_unit_test() {
     let world_string_sid = "S-1-5-21";
 
     let sid = string_to_sid(world_string_sid).unwrap_or(Vec::new());
-    assert_ne!(sid.capacity(), 0);
+    assert_ne!(sid.len(), 0);
 
     let sid_string = sid_to_string(sid.as_ptr() as PSID).unwrap_or(String::from(""));
     assert_ne!(sid_string.len(), 0);
@@ -656,7 +656,7 @@ fn acl_get_and_remove_test() {
 
     let world = string_sid_by_user("Everyone");
     let world_sid = string_to_sid(&world).unwrap_or(Vec::new());
-    assert_ne!(world_sid.capacity(), 0);
+    assert_ne!(world_sid.len(), 0);
 
     let path = path_obj.to_str().unwrap_or("");
     assert_ne!(path.len(), 0);

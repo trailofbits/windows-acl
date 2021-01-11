@@ -123,6 +123,8 @@ pub fn name_to_sid(name: &str, system: Option<&str>) -> Result<Vec<BYTE>, DWORD>
         return Err(unsafe { GetLastError() });
     }
 
+    unsafe { sid.set_len(sid_size as usize) };
+
     Ok(sid)
 }
 
@@ -150,6 +152,8 @@ pub fn string_to_sid(string_sid: &str) -> Result<Vec<BYTE>, DWORD> {
     if unsafe { CopySid(size, sid_buf.as_mut_ptr() as PSID, sid) } == 0 {
         return Err(unsafe { GetLastError() });
     }
+
+    unsafe { sid_buf.set_len(size as usize) };
 
     Ok(sid_buf)
 }
