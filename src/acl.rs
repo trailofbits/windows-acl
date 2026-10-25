@@ -282,7 +282,7 @@ fn acl_entry_size(entry_type: AceType) -> Option<DWORD> {
         AceType::AccessDenyCallback => Some(mem::size_of::<ACCESS_DENIED_CALLBACK_ACE>() as DWORD),
         AceType::AccessDenyObject => Some(mem::size_of::<ACCESS_DENIED_OBJECT_ACE>() as DWORD),
         AceType::AccessDenyCallbackObject => {
-            Some(mem::size_of::<ACCESS_DENIED_CALLBACK_OBJECT_ACE> as DWORD)
+            Some(mem::size_of::<ACCESS_DENIED_CALLBACK_OBJECT_ACE>() as DWORD)
         }
         AceType::SystemAudit => Some(mem::size_of::<SYSTEM_AUDIT_ACE>() as DWORD),
         AceType::SystemAuditCallback => Some(mem::size_of::<SYSTEM_AUDIT_CALLBACK_ACE>() as DWORD),
